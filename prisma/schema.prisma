@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Users Table - 用户表
+// ============================================================
+model User {
+  id                    String      @id @default(cuid())
+  email                 String      @unique
+  passwordHash          String
+  fullName              String?
+  avatarUrl             String?
+  
+  // Subscription status
+  subscriptionPlan      SubscriptionPlan? // 'basic' | 'pro' | 'enterprise'
+  subscriptionStatus    SubscriptionStatus? // 'active' | 'inactive' | 'trial' | 'expired' | 'cancelled'
+  subscriptionStartDate DateTime?
+  subscriptionEndDate   DateTime?
+  renewalDate           DateTime?
+  isAutoRenew           Boolean     @default(true)
+  
+  // Relations
+  subscriptions         Subscription[]
+  payments              Payment[]
+  railwayInstances      RailwayInstance[]
+  invoices              Invoice[]
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  deletedAt             DateTime?
+
+  @@index([email])
+  @@index([subscriptionStatus])
+}
+
+// ============================================================
+// Subscriptions Table - 订阅表
+// ============================================================
+model Subscription {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  planType              SubscriptionPlan
+  priceAmount           Int         // in cents/fen
+  currency              String      @default("CNY")
+  status                SubscriptionStatus
+  
+  startDate             DateTime
+  endDate               DateTime
+  renewalDate           DateTime?
+  isAutoRenew           Boolean     @default(true)
+  trialEndDate          DateTime?
+  
+  // Channel configuration
+  channelCredentials    ChannelCredential[]
+  
+  // Relations
+  payments              Payment[]
+  railwayInstances      RailwayInstance[]
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+}
+
+// ============================================================
+// Channel Credentials Table - 通道凭证表
+// ============================================================
+model ChannelCredential {
+  id                    String      @id @default(cuid())
+  subscriptionId        String
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  channelType           ChannelType // 'feishu' | 'dingtalk' | 'wecom' | 'telegram'
+  channelName           String?
+  credentialsEncrypted  Json        // Encrypted app ID, secret, etc.
+  isActive              Boolean     @default(true)
+  envVarNames           Json?       // Mapping to environment variable names
+  
+  lastValidatedAt       DateTime?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([subscriptionId])
+  @@index([channelType])
+  @@unique([subscriptionId, channelType])
+}
+
+// ============================================================
+// Payments Table - 支付记录表
+// ============================================================
+model Payment {
+  id                    String      @id @default(cuid())
+  orderId               String      @unique
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  subscriptionId        String?
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id])
+  
+  paymentMethod         PaymentMethod // 'alipay' | 'wechat'
+  amount                Int         // in cents/fen
+  currency              String      @default("CNY")
+  status                PaymentStatus // 'pending' | 'success' | 'failed' | 'refunded'
+  
+  // External transaction IDs
+  alipayTradeNo         String?
+  wechatTransactionId   String?
+  
+  paymentTime           DateTime?
+  notifyTime            DateTime?
+  
+  refundAmount          Int?
+  refundTime            DateTime?
+  
+  description           String?
+  metadata              Json?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentMethod])
+}
+
+// ============================================================
+// Railway Instances Table - Railway实例表
+// ============================================================
+model RailwayInstance {
+  id                    String      @id @default(cuid())
+  subscriptionId        String
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  projectId             String      // Railway项目ID
+  projectName           String      // Railway项目名称
+  serviceId             String      // Railway服务ID
+  serviceName           String      // Railway服务名称
+  environmentId         String      // 环境ID
+  environmentName       String      @default("production")
+  
+  deploymentId          String?     // 当前部署ID
+  deploymentStatus      String      @default("INITIALIZING") // INITIALIZING | BUILDING | DEPLOYING | RUNNING | FAILED | CRASHED
+  deploymentUpdatedAt   DateTime    @default(now())
+  deploymentCompletedAt DateTime?
+  
+  status                String      @default("INITIALIZING") // INITIALIZING | DEPLOYING | RUNNING | FAILED | DELETED
+  publicUrl             String?     // 公开访问URL
+  
+  variables             Json        @default("{}")  // 环境变量（敏感值屏蔽）
+  logs                  Json        @default("[]")  // 部署日志（最后1000条）
+  
+  errorMessage          String?     // 错误信息（如有）
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  deletedAt             DateTime?
+
+  @@index([subscriptionId])
+  @@index([userId])
+  @@index([status])
+  @@index([deploymentStatus])
+  @@unique([projectId])
+}
+
+// ============================================================
+// Invoices Table - 发票表
+// ============================================================
+model Invoice {
+  id                    String      @id @default(cuid())
+  invoiceNumber         String      @unique
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  paymentId             String?
+  amount                Int
+  taxAmount             Int?
+  totalAmount           Int
+  
+  issueDate             DateTime
+  dueDate               DateTime?
+  status                InvoiceStatus // 'draft' | 'issued' | 'paid' | 'overdue'
+  
+  downloadUrl           String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum SubscriptionPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  TRIAL
+  EXPIRED
+  CANCELLED
+  PENDING
+}
+
+enum ChannelType {
+  FEISHU
+  DINGTALK
+  WECOM
+  TELEGRAM
+  SLACK
+  DISCORD
+}
+
+enum PaymentMethod {
+  ALIPAY
+  WECHAT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+}

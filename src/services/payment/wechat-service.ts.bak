@@ -1,0 +1,549 @@
+import { v4 as uuidv4 } from 'uuid';
+import { AppError } from '../../utils/errors';
+import { prisma } from '../../database/prisma';
+
+/**
+ * 微信支付服务
+ * 处理微信支付相关的所有操作，包括：
+ * - H5支付和JSAPI支付
+ * - 支付回调处理
+ * - 订单查询
+ * - 退款申请
+ *
+ * 注意：这是一个简化实现，生产环境需要完整的微信支付 SDK 集成
+ */
+
+export interface CreatePaymentParams {
+  userId: string;
+  subscriptionId?: string;
+  planId?: string;
+  outTradeNo: string;
+  description: string;
+  totalAmount: number;
+  tradeType: 'H5' | 'JSAPI' | 'APP';
+  notifyUrl?: string;
+  clientIp?: string;
+  openId?: string;
+}
+
+export interface RefundParams {
+  outTradeNo: string;
+  refundAmount: number;
+  refundReason: string;
+}
+
+export interface QueryResult {
+  transactionId?: string;
+  outTradeNo: string;
+  tradeState: string;
+  amount?: number;
+}
+
+export interface RefundResult {
+  refundId: string;
+  outTradeNo: string;
+  refundAmount: number;
+  refundStatus: string;
+}
+
+export interface PaymentResponse {
+  paymentId: string;
+  outTradeNo: string;
+  amount: number;
+  description: string;
+  paymentUrl?: string;
+  qrCode?: string;
+  status: string;
+  createdAt: string;
+}
+
+export class WechatService {
+  private appId: string;
+  private mchId: string;
+  private apiKey: string;
+  private certPath: string;
+  private keyPath: string;
+
+  constructor() {
+    this.appId = process.env.WECHAT_APP_ID || '';
+    this.mchId = process.env.WECHAT_MCH_ID || '';
+    this.apiKey = process.env.WECHAT_API_KEY || '';
+    this.certPath = process.env.WECHAT_CERT_PATH || '';
+    this.keyPath = process.env.WECHAT_KEY_PATH || '';
+  }
+
+  /**
+   * 创建支付订单
+   */
+  async createPayment(params: CreatePaymentParams): Promise<PaymentResponse> {
+    try {
+      const outTradeNo = params.outTradeNo || `WX_${Date.now()}_${uuidv4().slice(0, 8)}`;
+      const paymentId = uuidv4();
+
+      // 记录支付到数据库
+      await prisma.payment.create({
+        data: {
+          id: paymentId,
+          userId: params.userId,
+          subscriptionId: params.subscriptionId,
+          planId: params.planId,
+          amount: params.totalAmount,
+          paymentMethod: `wechat_${params.tradeType.toLowerCase()}`,
+          status: 'pending',
+          transactionId: outTradeNo,
+        },
+      });
+
+      // 模拟支付 URL（生产环境需要真实签名）
+      const paymentUrl = `https://payment-simulator.example.com/wechat?outTradeNo=${outTradeNo}&amount=${params.totalAmount}&desc=${encodeURIComponent(params.description)}&type=${params.tradeType}`;
+
+      return {
+        paymentId,
+        outTradeNo,
+        amount: params.totalAmount,
+        description: params.description,
+        paymentUrl,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      throw new AppError(500, '创建微信支付失败', 'WECHAT_CREATE_FAILED');
+    }
+  }
+
+  /**
+   * 创建 H5 支付
+   */
+  async createH5Payment(params: Omit<CreatePaymentParams, 'tradeType'>): Promise<PaymentResponse> {
+    return this.createPayment({ ...params, tradeType: 'H5' });
+  }
+
+  /**
+   * 创建 JSAPI 支付
+   */
+  async createJsapiPayment(params: Omit<CreatePaymentParams, 'tradeType'> & { openId: string }): Promise<PaymentResponse> {
+    return this.createPayment({ ...params, tradeType: 'JSAPI' });
+  }
+
+  /**
+   * 查询支付状态
+   */
+  async queryPaymentStatus(outTradeNo: string): Promise<QueryResult> {
+    try {
+      const payment = await prisma.payment.findUnique({
+        where: { transactionId: outTradeNo },
+      });
+
+      if (!payment) {
+        throw new AppError(404, '支付记录不存在', 'PAYMENT_NOT_FOUND');
+      }
+
+      return {
+        outTradeNo,
+        tradeState: payment.status,
+        amount: payment.amount,
+      };
+    } catch (error) {
+      throw new AppError(500, '查询支付状态失败', 'WECHAT_QUERY_FAILED');
+    }
+  }
+
+  /**
+   * 处理支付回调
+   */
+  async handleNotify(data: any): Promise<boolean> {
+    try {
+      // 验证签名（生产环境必须）
+      // const verified = this.verifySign(data);
+      // if (!verified) throw new AppError(400, '签名验证失败', 'INVALID_SIGNATURE');
+
+      const { out_trade_no, trade_state, transaction_id } = data;
+
+      // 更新支付状态
+      await prisma.payment.update({
+        where: { transactionId: out_trade_no },
+        data: {
+          status: trade_state === 'SUCCESS' ? 'completed' : 'failed',
+          completedAt: trade_state === 'SUCCESS' ? new Date() : null,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      throw new AppError(500, '处理支付回调失败', 'WECHAT_NOTIFY_FAILED');
+    }
+  }
+
+  /**
+   * 申请退款
+   */
+  async refund(params: RefundParams): Promise<RefundResult> {
+    try {
+      const refundId = `REFUND_${Date.now()}_${uuidv4().slice(0, 8)}`;
+
+      await prisma.refund.create({
+        data: {
+          id: refundId,
+          paymentId: params.outTradeNo,
+          amount: params.refundAmount,
+          reason: params.refundReason,
+          status: 'pending',
+        },
+      });
+
+      return {
+        refundNo: refundId,
+        outTradeNo: params.outTradeNo,
+        refundAmount: params.refundAmount,
+        refundStatus: 'pending',
+      };
+    } catch (error) {
+      throw new AppError(500, '退款申请失败', 'WECHAT_REFUND_FAILED');
+    }
+  }
+
+  /**
+   * 生成签名（生产环境需要）
+   */
+  private generateSign(params: Record<string, any>): string {
+    // 实现微信支付签名逻辑
+    return 'signature_placeholder';
+  }
+
+  /**
+   * 验证签名（生产环境需要）
+   */
+  private verifySign(data: any): boolean {
+    // 实现签名验证逻辑
+    return true;
+  }
+}
+  private apiKey: string;
+
+  constructor() {
+    this.mchId = process.env.WECHAT_MCHID || '';
+    this.apiKey = process.env.WECHAT_API_KEY || '';
+
+    // 初始化微信SDK
+    this.wechat = new Wechatpay({
+      appId: process.env.WECHAT_APPID,
+      mchId: this.mchId,
+      privateKey: process.env.WECHAT_PRIVATE_KEY,
+      serialNo: process.env.WECHAT_CERTIFICATE_SERIAL,
+      apiv3Key: process.env.WECHAT_APIV3_KEY,
+      sandbox: process.env.NODE_ENV !== 'production',
+    });
+  }
+
+  /**
+   * 创建H5支付订单
+   * 用于移动端支付
+   */
+  async createH5Payment(params: CreatePaymentParams): Promise<string> {
+    try {
+      const requestBody = {
+        appid: process.env.WECHAT_APPID,
+        mchid: this.mchId,
+        out_trade_no: params.outTradeNo,
+        description: params.description,
+        notify_url: params.notifyUrl,
+        amount: {
+          total: Math.round(params.totalAmount * 100), // 转换为分
+          currency: 'CNY',
+        },
+        scene_info: {
+          h5_info: {
+            type: 'iOS',
+            app_name: 'OpenClaw',
+            app_url: process.env.APP_URL,
+          },
+        },
+      };
+
+      const response = await this.wechat.request('POST', '/v3/pay/transactions/h5', requestBody);
+
+      if (response.h5_url) {
+        return response.h5_url;
+      }
+
+      throw new AppError('生成微信H5支付URL失败', 'WECHAT_H5_URL_ERROR', 500);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('创建微信H5支付订单失败', 'WECHAT_H5_CREATE_ERROR', 500);
+    }
+  }
+
+  /**
+   * 创建JSAPI支付订单
+   * 用于公众号/小程序内支付
+   */
+  async createJsApiPayment(params: CreatePaymentParams & { openId: string }): Promise<{
+    prepayId: string;
+    nonceStr: string;
+    timeStamp: string;
+    signature: string;
+  }> {
+    try {
+      const requestBody = {
+        appid: process.env.WECHAT_APPID,
+        mchid: this.mchId,
+        out_trade_no: params.outTradeNo,
+        description: params.description,
+        notify_url: params.notifyUrl,
+        amount: {
+          total: Math.round(params.totalAmount * 100), // 转换为分
+          currency: 'CNY',
+        },
+        payer: {
+          openid: params.openId,
+        },
+      };
+
+      const response = await this.wechat.request('POST', '/v3/pay/transactions/jsapi', requestBody);
+
+      if (!response.prepay_id) {
+        throw new AppError('获取prepayId失败', 'PREPAY_ID_ERROR', 500);
+      }
+
+      // 生成支付签名
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonceStr = crypto.randomBytes(16).toString('hex');
+      const signatureData = [
+        process.env.WECHAT_APPID,
+        timestamp,
+        nonceStr,
+        `prepay_id=${response.prepay_id}`,
+      ].join('\n');
+
+      const privateKey = crypto.createPrivateKey({
+        key: process.env.WECHAT_PRIVATE_KEY || '',
+        format: 'pem',
+      });
+
+      const signature = crypto
+        .createSign('RSA-SHA256')
+        .update(signatureData)
+        .sign(privateKey, 'base64');
+
+      return {
+        prepayId: response.prepay_id,
+        nonceStr,
+        timeStamp: timestamp,
+        signature,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('创建微信JSAPI支付订单失败', 'WECHAT_JSAPI_ERROR', 500);
+    }
+  }
+
+  /**
+   * 验证支付回调签名
+   */
+  verifyNotify(
+    body: string,
+    timestamp: string,
+    nonce: string,
+    signature: string
+  ): boolean {
+    try {
+      const message = `${timestamp}\n${nonce}\n${body}\n`;
+
+      const publicKey = crypto.createPublicKey({
+        key: process.env.WECHAT_PUBLIC_KEY || '',
+        format: 'pem',
+      });
+
+      return crypto.createVerify('RSA-SHA256').update(message).verify(publicKey, signature, 'base64');
+    } catch (error) {
+      console.error('微信签名验证失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 处理支付回调
+   */
+  async handleNotify(
+    body: string,
+    timestamp: string,
+    nonce: string,
+    signature: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      // 验证签名
+      if (!this.verifyNotify(body, timestamp, nonce, signature)) {
+        throw new AppError('微信签名验证失败', 'INVALID_SIGNATURE', 400);
+      }
+
+      const data = JSON.parse(body);
+
+      if (data.event_type !== 'TRANSACTION.SUCCESS') {
+        return {
+          success: false,
+          message: '交易未完成',
+        };
+      }
+
+      const resource = data.resource;
+      const { out_trade_no, trade_state, amount, success_time } = resource;
+
+      if (trade_state !== 'SUCCESS') {
+        return {
+          success: false,
+          message: '交易未成功',
+        };
+      }
+
+      // 查询数据库中的支付记录
+      const payment = await prisma.payment.findUnique({
+        where: { order_id: out_trade_no },
+      });
+
+      if (!payment) {
+        throw new AppError('订单不存在', 'ORDER_NOT_FOUND', 404);
+      }
+
+      // 验证金额（微信返回的是分）
+      if (Math.round(amount.total) !== Math.round(payment.amount * 100)) {
+        throw new AppError('金额不匹配', 'AMOUNT_MISMATCH', 400);
+      }
+
+      // 如果已处理过，直接返回成功
+      if (payment.status === 'SUCCESS') {
+        return {
+          success: true,
+          message: '订单已处理',
+        };
+      }
+
+      // 更新支付记录
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'SUCCESS',
+          trade_no: resource.transaction_id,
+          paid_at: new Date(success_time),
+          raw_data: resource,
+        },
+      });
+
+      // 更新订阅状态
+      const subscription = await prisma.subscription.findUnique({
+        where: { id: payment.subscription_id },
+      });
+
+      if (subscription) {
+        const renewalDate = new Date(subscription.current_period_end);
+        renewalDate.setMonth(renewalDate.getMonth() + 1);
+
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'ACTIVE',
+            current_period_end: renewalDate,
+            auto_renew: true,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        message: '订单处理成功',
+      };
+    } catch (error) {
+      console.error('处理微信回调失败:', error);
+      return {
+        success: false,
+        message: error instanceof AppError ? error.message : '处理失败',
+      };
+    }
+  }
+
+  /**
+   * 查询订单状态
+   */
+  async queryOrder(outTradeNo: string): Promise<QueryResult> {
+    try {
+      const response = await this.wechat.request(
+        'GET',
+        `/v3/pay/transactions/out-trade-no/${outTradeNo}`,
+        { mchid: this.mchId }
+      );
+
+      return {
+        transactionId: response.transaction_id,
+        outTradeNo: response.out_trade_no,
+        tradeState: response.trade_state,
+        amount: response.amount?.total ? response.amount.total / 100 : undefined,
+      };
+    } catch (error) {
+      throw new AppError('查询微信订单失败', 'QUERY_ERROR', 500);
+    }
+  }
+
+  /**
+   * 申请退款
+   */
+  async refund(params: RefundParams): Promise<RefundResult> {
+    try {
+      const outRefundNo = `REFUND_${uuidv4().replace(/-/g, '')}`;
+
+      const requestBody = {
+        out_trade_no: params.outTradeNo,
+        out_refund_no: outRefundNo,
+        reason: params.refundReason,
+        amount: {
+          refund: Math.round(params.refundAmount * 100),
+          total: Math.round(params.refundAmount * 100), // 简化处理，实际需要从订单查询
+        },
+      };
+
+      const response = await this.wechat.request(
+        'POST',
+        '/v3/refund/domestic/refunds',
+        requestBody
+      );
+
+      return {
+        refundId: response.refund_id,
+        outTradeNo: response.out_trade_no,
+        refundAmount: response.amount.refund / 100,
+        refundStatus: 'SUCCESS',
+      };
+    } catch (error) {
+      throw new AppError('申请退款失败', 'REFUND_ERROR', 500);
+    }
+  }
+
+  /**
+   * 验证支付金额
+   */
+  async verifyPaymentAmount(outTradeNo: string, expectedAmount: number): Promise<boolean> {
+    try {
+      const result = await this.queryOrder(outTradeNo);
+      return result.amount === expectedAmount;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * 关闭订单
+   */
+  async closeOrder(outTradeNo: string): Promise<void> {
+    try {
+      await this.wechat.request('POST', `/v3/pay/transactions/out-trade-no/${outTradeNo}/close`, {
+        mchid: this.mchId,
+      });
+    } catch (error) {
+      throw new AppError('关闭订单失败', 'CLOSE_ORDER_ERROR', 500);
+    }
+  }
+}
+
+// 导出单例
+export const wechatService = new WechatService();

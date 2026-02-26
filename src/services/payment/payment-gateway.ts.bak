@@ -1,0 +1,246 @@
+import { alipayService, AlipayService, CreatePaymentParams as AlipayPaymentParams } from './alipay-service';
+import { wechatService, WechatService, CreatePaymentParams as WechatPaymentParams } from './wechat-service';
+import { AppError } from '../../utils/errors';
+import { prisma } from '../../database/prisma';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * 支付网关
+ * 统一处理支付宝和微信支付的接口
+ */
+
+export type PaymentMethod = 'alipay' | 'wechat';
+export type TradeType = 'pc' | 'h5' | 'jsapi' | 'app';
+
+export interface CreatePaymentRequest {
+  userId: string;
+  subscriptionId: string;
+  plan: string;
+  amount: number;
+  method: PaymentMethod;
+  tradeType?: TradeType;
+  openId?: string; // 微信JSAPI必需
+}
+
+export interface PaymentResult {
+  outTradeNo: string;
+  method: PaymentMethod;
+  paymentUrl?: string;
+  prepayInfo?: {
+    prepayId: string;
+    nonceStr: string;
+    timeStamp: string;
+    signature: string;
+  };
+}
+
+export class PaymentGateway {
+  constructor(
+    private alipay: AlipayService,
+    private wechat: WechatService
+  ) {}
+
+  /**
+   * 创建支付订单
+   */
+  async createPayment(request: CreatePaymentRequest): Promise<PaymentResult> {
+    try {
+      // 生成订单号
+      const outTradeNo = `${request.method.toUpperCase()}_${Date.now()}_${uuidv4().substring(0, 8)}`;
+
+      // 保存支付记录到数据库
+      const payment = await prisma.payment.create({
+        data: {
+          user_id: request.userId,
+          subscription_id: request.subscriptionId,
+          order_id: outTradeNo,
+          method: request.method,
+          amount: request.amount,
+          status: 'PENDING',
+          description: `${request.plan} 订阅`,
+          metadata: {
+            tradeType: request.tradeType || 'h5',
+          },
+        },
+      });
+
+      const notifyUrl = `${process.env.APP_URL}/api/payment/${request.method}/notify`;
+
+      if (request.method === 'alipay') {
+        return await this.createAlipayPayment(request, outTradeNo, notifyUrl);
+      } else if (request.method === 'wechat') {
+        return await this.createWechatPayment(request, outTradeNo, notifyUrl);
+      }
+
+      throw new AppError('不支持的支付方式', 'UNSUPPORTED_METHOD', 400);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('创建支付订单失败', 'CREATE_PAYMENT_ERROR', 500);
+    }
+  }
+
+  /**
+   * 创建支付宝支付
+   */
+  private async createAlipayPayment(
+    request: CreatePaymentRequest,
+    outTradeNo: string,
+    notifyUrl: string
+  ): Promise<PaymentResult> {
+    const params: AlipayPaymentParams = {
+      userId: request.userId,
+      subscriptionId: request.subscriptionId,
+      outTradeNo,
+      subject: `${request.plan} 订阅`,
+      totalAmount: request.amount,
+      description: `购买 ${request.plan} 订阅，可获得开通对应的功能和支持`,
+      notifyUrl,
+    };
+
+    let paymentUrl: string;
+
+    if (request.tradeType === 'pc') {
+      paymentUrl = await this.alipay.createPagePayUrl(params);
+    } else {
+      paymentUrl = await this.alipay.createWapPayUrl(params);
+    }
+
+    return {
+      outTradeNo,
+      method: 'alipay',
+      paymentUrl,
+    };
+  }
+
+  /**
+   * 创建微信支付
+   */
+  private async createWechatPayment(
+    request: CreatePaymentRequest,
+    outTradeNo: string,
+    notifyUrl: string
+  ): Promise<PaymentResult> {
+    const tradeType = request.tradeType || 'h5';
+
+    const params = {
+      userId: request.userId,
+      subscriptionId: request.subscriptionId,
+      outTradeNo,
+      description: `购买 ${request.plan} 订阅`,
+      totalAmount: request.amount,
+      tradeType: tradeType as 'H5' | 'JSAPI' | 'APP',
+      notifyUrl,
+      openId: request.openId,
+    };
+
+    if (tradeType === 'jsapi') {
+      if (!request.openId) {
+        throw new AppError('JSAPI支付需要openId', 'MISSING_OPENID', 400);
+      }
+
+      const prepayInfo = await this.wechat.createJsApiPayment(
+        params as any
+      );
+
+      return {
+        outTradeNo,
+        method: 'wechat',
+        prepayInfo,
+      };
+    } else {
+      const paymentUrl = await this.wechat.createH5Payment(params as any);
+
+      return {
+        outTradeNo,
+        method: 'wechat',
+        paymentUrl,
+      };
+    }
+  }
+
+  /**
+   * 处理支付回调
+   */
+  async handleCallback(
+    method: PaymentMethod,
+    body: any,
+    headers?: any
+  ): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      if (method === 'alipay') {
+        return await this.alipay.handleNotify(body);
+      } else if (method === 'wechat') {
+        const timestamp = headers?.['wechat-pay-timestamp'];
+        const nonce = headers?.['wechat-pay-nonce'];
+        const signature = headers?.['wechat-pay-signature'];
+
+        if (!timestamp || !nonce || !signature) {
+          throw new AppError('缺少必要的签名信息', 'MISSING_SIGNATURE', 400);
+        }
+
+        const bodyString = JSON.stringify(body);
+        return await this.wechat.handleNotify(bodyString, timestamp, nonce, signature);
+      }
+
+      throw new AppError('不支持的支付方式', 'UNSUPPORTED_METHOD', 400);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('处理支付回调失败', 'CALLBACK_ERROR', 500);
+    }
+  }
+
+  /**
+   * 查询订单状态
+   */
+  async queryOrder(method: PaymentMethod, outTradeNo: string) {
+    try {
+      if (method === 'alipay') {
+        return await this.alipay.queryOrder(outTradeNo);
+      } else if (method === 'wechat') {
+        return await this.wechat.queryOrder(outTradeNo);
+      }
+
+      throw new AppError('不支持的支付方式', 'UNSUPPORTED_METHOD', 400);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('查询订单失败', 'QUERY_ERROR', 500);
+    }
+  }
+
+  /**
+   * 申请退款
+   */
+  async refund(
+    method: PaymentMethod,
+    outTradeNo: string,
+    amount: number,
+    reason: string
+  ) {
+    try {
+      if (method === 'alipay') {
+        return await this.alipay.refund({
+          outTradeNo,
+          refundAmount: amount,
+          refundReason: reason,
+        });
+      } else if (method === 'wechat') {
+        return await this.wechat.refund({
+          outTradeNo,
+          refundAmount: amount,
+          refundReason: reason,
+        });
+      }
+
+      throw new AppError('不支持的支付方式', 'UNSUPPORTED_METHOD', 400);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('申请退款失败', 'REFUND_ERROR', 500);
+    }
+  }
+}
+
+// 导出单例
+export const paymentGateway = new PaymentGateway(alipayService, wechatService);

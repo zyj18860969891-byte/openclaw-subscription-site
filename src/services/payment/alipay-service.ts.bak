@@ -1,0 +1,481 @@
+import { v4 as uuidv4 } from 'uuid';
+import { AppError } from '../../utils/errors';
+import { prisma } from '../../database/prisma';
+import axios from 'axios';
+
+/**
+ * 支付宝服务
+ * 处理支付宝相关的所有操作，包括：
+ * - 支付页面/H5支付URL生成
+ * - 支付回调处理
+ * - 订单查询
+ * - 退款申请
+ *
+ * 注意：这是一个简化实现，生产环境需要完整的支付宝 SDK 集成
+ */
+
+export interface CreatePaymentParams {
+  userId: string;
+  subscriptionId?: string;
+  planId?: string;
+  outTradeNo: string;
+  subject: string;
+  totalAmount: number;
+  description?: string;
+  returnUrl?: string;
+  notifyUrl?: string;
+  paymentMethod: 'pc' | 'h5' | 'jsapi';
+}
+
+export interface RefundParams {
+  outTradeNo: string;
+  refundAmount: number;
+  refundReason: string;
+}
+
+export interface QueryResult {
+  tradeNo?: string;
+  outTradeNo: string;
+  tradeStatus: string;
+  totalAmount?: number;
+}
+
+export interface RefundResult {
+  refundNo: string;
+  outTradeNo: string;
+  refundAmount: number;
+  refundStatus: string;
+}
+
+export interface PaymentResponse {
+  paymentId: string;
+  outTradeNo: string;
+  amount: number;
+  subject: string;
+  paymentUrl?: string;
+  qrCode?: string;
+  status: string;
+  createdAt: string;
+}
+
+export class AlipayService {
+  private appId: string;
+  private privateKey: string;
+  private alipayPublicKey: string;
+  private gateway: string;
+
+  constructor() {
+    this.appId = process.env.ALIPAY_APP_ID || 'your-app-id';
+    this.privateKey = process.env.ALIPAY_PRIVATE_KEY || '';
+    this.alipayPublicKey = process.env.ALIPAY_PUBLIC_KEY || '';
+    this.gateway = 'https://openapi.alipay.com/gateway.do';
+  }
+
+  /**
+   * 创建支付订单
+   */
+  async createPayment(params: CreatePaymentParams): Promise<PaymentResponse> {
+    try {
+      const outTradeNo = params.outTradeNo || `ALI_${Date.now()}_${uuidv4().slice(0, 8)}`;
+      const paymentId = uuidv4();
+
+      // 记录支付到数据库
+      await prisma.payment.create({
+        data: {
+          id: paymentId,
+          userId: params.userId,
+          subscriptionId: params.subscriptionId,
+          planId: params.planId,
+          amount: params.totalAmount,
+          paymentMethod: `alipay_${params.paymentMethod}`,
+          status: 'pending',
+          transactionId: outTradeNo,
+        },
+      });
+
+      // 构建支付参数
+      const bizContent = {
+        out_trade_no: outTradeNo,
+        total_amount: params.totalAmount.toFixed(2),
+        subject: params.subject,
+        product_code: 'FAST_INSTANT_TRADE_PAY',
+        ...(params.paymentMethod === 'h5' && { h5_type: 'in_app' }),
+      };
+
+      // 模拟支付 URL（生产环境需要真实签名）
+      const paymentUrl = `https://payment-simulator.example.com/alipay?outTradeNo=${outTradeNo}&amount=${params.totalAmount}&subject=${encodeURIComponent(params.subject)}`;
+
+      return {
+        paymentId,
+        outTradeNo,
+        amount: params.totalAmount,
+        subject: params.subject,
+        paymentUrl,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      throw new AppError(500, '创建支付宝支付失败', 'ALIPAY_CREATE_FAILED');
+    }
+  }
+
+  /**
+   * 创建 PC 支付
+   */
+  async createPCPayment(params: Omit<CreatePaymentParams, 'paymentMethod'>): Promise<PaymentResponse> {
+    return this.createPayment({ ...params, paymentMethod: 'pc' });
+  }
+
+  /**
+   * 创建 H5 支付
+   */
+  async createH5Payment(params: Omit<CreatePaymentParams, 'paymentMethod'>): Promise<PaymentResponse> {
+    return this.createPayment({ ...params, paymentMethod: 'h5' });
+  }
+
+  /**
+   * 查询支付状态
+   */
+  async queryPaymentStatus(outTradeNo: string): Promise<QueryResult> {
+    try {
+      // 从数据库查询支付记录
+      const payment = await prisma.payment.findUnique({
+        where: { transactionId: outTradeNo },
+      });
+
+      if (!payment) {
+        throw new AppError(404, '支付记录不存在', 'PAYMENT_NOT_FOUND');
+      }
+
+      return {
+        outTradeNo,
+        tradeStatus: payment.status,
+        totalAmount: payment.amount,
+      };
+    } catch (error) {
+      throw new AppError(500, '查询支付状态失败', 'ALIPAY_QUERY_FAILED');
+    }
+  }
+
+  /**
+   * 处理支付回调
+   */
+  async handleNotify(data: any): Promise<boolean> {
+    try {
+      // 验证签名（生产环境必须）
+      // const verified = this.verifySign(data);
+      // if (!verified) throw new AppError(400, '签名验证失败', 'INVALID_SIGNATURE');
+
+      const { out_trade_no, trade_status, trade_no } = data;
+
+      // 更新支付状态
+      await prisma.payment.update({
+        where: { transactionId: out_trade_no },
+        data: {
+          status: trade_status === 'TRADE_SUCCESS' ? 'completed' : 'failed',
+          completedAt: trade_status === 'TRADE_SUCCESS' ? new Date() : null,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      throw new AppError(500, '处理支付回调失败', 'ALIPAY_NOTIFY_FAILED');
+    }
+  }
+
+  /**
+   * 申请退款
+   */
+  async refund(params: RefundParams): Promise<RefundResult> {
+    try {
+      const refundId = `REFUND_${Date.now()}_${uuidv4().slice(0, 8)}`;
+
+      // 创建退款记录
+      await prisma.refund.create({
+        data: {
+          id: refundId,
+          paymentId: params.outTradeNo, // 实际应该关联 paymentId
+          amount: params.refundAmount,
+          reason: params.refundReason,
+          status: 'pending',
+        },
+      });
+
+      return {
+        refundNo: refundId,
+        outTradeNo: params.outTradeNo,
+        refundAmount: params.refundAmount,
+        refundStatus: 'pending',
+      };
+    } catch (error) {
+      throw new AppError(500, '退款申请失败', 'ALIPAY_REFUND_FAILED');
+    }
+  }
+
+  /**
+   * 生成支付参数签名（生产环境需要）
+   */
+  private generateSign(params: Record<string, any>): string {
+    // 实现支付宝签名逻辑
+    // 需要私钥参与
+    return 'signature_placeholder';
+  }
+
+  /**
+   * 验证回调签名（生产环境需要）
+   */
+  private verifySign(data: any): boolean {
+    // 实现签名验证逻辑
+    return true;
+  }
+}
+    this.alipay = new AliPaySDK({
+      appId: process.env.ALIPAY_APP_ID,
+      privateKey: process.env.ALIPAY_PRIVATE_KEY,
+      alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY,
+      signType: 'RSA2',
+      sandbox: process.env.NODE_ENV !== 'production',
+    });
+  }
+
+  /**
+   * 生成电脑网站支付URL
+   * 用于PC端商品购买页面跳转
+   */
+  async createPagePayUrl(params: CreatePaymentParams): Promise<string> {
+    try {
+      const formData = {
+        out_trade_no: params.outTradeNo,
+        product_code: 'FAST_INSTANT_TRADE_PAY',
+        total_amount: params.totalAmount.toString(),
+        subject: params.subject,
+        body: params.description,
+        return_url: params.returnUrl || `${process.env.APP_URL}/payment/alipay/return`,
+        notify_url: params.notifyUrl,
+        timeout_express: '2h',
+      };
+
+      // 使用支付宝SDK生成支付页面表单
+      const pageForm = await this.alipay.pageExecute('alipay.trade.page.pay', {
+        bizContent: formData,
+      });
+
+      return pageForm;
+    } catch (error) {
+      throw new AppError('生成支付宝页面支付URL失败', 'ALIPAY_PAGE_URL_ERROR', 500);
+    }
+  }
+
+  /**
+   * 生成H5支付URL
+   * 用于移动端支付，返回跳转链接
+   */
+  async createWapPayUrl(params: CreatePaymentParams): Promise<string> {
+    try {
+      const url = await this.alipay.pageExecute('alipay.trade.wap.pay', {
+        bizContent: {
+          out_trade_no: params.outTradeNo,
+          product_code: 'QUICK_WAP_WAY',
+          total_amount: params.totalAmount.toString(),
+          subject: params.subject,
+          body: params.description,
+          return_url: params.returnUrl || `${process.env.APP_URL}/payment/alipay/return`,
+          notify_url: params.notifyUrl,
+          timeout_express: '2h',
+        },
+      });
+
+      return url;
+    } catch (error) {
+      throw new AppError('生成支付宝H5支付URL失败', 'ALIPAY_WAP_URL_ERROR', 500);
+    }
+  }
+
+  /**
+   * 验证支付宝回调签名
+   * 确保回调来自真实的支付宝服务器
+   */
+  verifyNotify(params: Record<string, any>): boolean {
+    try {
+      return this.alipay.verifySignature(params);
+    } catch (error) {
+      console.error('支付宝签名验证失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 处理支付回调
+   * 支付宝服务器回调时调用
+   */
+  async handleNotify(params: Record<string, any>): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      // 验证签名
+      if (!this.verifyNotify(params)) {
+        throw new AppError('支付宝签名验证失败', 'INVALID_SIGNATURE', 400);
+      }
+
+      const { out_trade_no, trade_status, total_amount, gmt_payment } = params;
+
+      // 检查交易状态
+      if (trade_status !== 'TRADE_SUCCESS' && trade_status !== 'TRADE_FINISHED') {
+        return {
+          success: false,
+          message: '交易未完成',
+        };
+      }
+
+      // 查询数据库中的支付记录
+      const payment = await prisma.payment.findUnique({
+        where: { order_id: out_trade_no },
+      });
+
+      if (!payment) {
+        throw new AppError('订单不存在', 'ORDER_NOT_FOUND', 404);
+      }
+
+      // 验证金额
+      if (parseFloat(total_amount) !== payment.amount) {
+        throw new AppError('金额不匹配', 'AMOUNT_MISMATCH', 400);
+      }
+
+      // 如果已处理过，直接返回成功
+      if (payment.status === 'SUCCESS') {
+        return {
+          success: true,
+          message: '订单已处理',
+        };
+      }
+
+      // 更新支付记录
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'SUCCESS',
+          trade_no: params.trade_no,
+          paid_at: new Date(gmt_payment),
+          raw_data: params,
+        },
+      });
+
+      // 更新订阅状态
+      const subscription = await prisma.subscription.findUnique({
+        where: { id: payment.subscription_id },
+      });
+
+      if (subscription) {
+        const renewalDate = new Date(subscription.current_period_end);
+        renewalDate.setMonth(renewalDate.getMonth() + 1);
+
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'ACTIVE',
+            current_period_end: renewalDate,
+            auto_renew: true,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        message: '订单处理成功',
+      };
+    } catch (error) {
+      console.error('处理支付宝回调失败:', error);
+      return {
+        success: false,
+        message: error instanceof AppError ? error.message : '处理失败',
+      };
+    }
+  }
+
+  /**
+   * 查询订单状态
+   */
+  async queryOrder(outTradeNo: string): Promise<QueryResult> {
+    try {
+      const result = await this.alipay.request('alipay.trade.query', {
+        bizContent: {
+          out_trade_no: outTradeNo,
+        },
+      });
+
+      const tradeQueryResponse = result.alipay_trade_query_response;
+
+      if (tradeQueryResponse.code !== '10000') {
+        throw new AppError(
+          `查询失败: ${tradeQueryResponse.msg}`,
+          'QUERY_FAILED',
+          400
+        );
+      }
+
+      return {
+        tradeNo: tradeQueryResponse.trade_no,
+        outTradeNo: tradeQueryResponse.out_trade_no,
+        tradeStatus: tradeQueryResponse.trade_status,
+        totalAmount: parseFloat(tradeQueryResponse.total_amount),
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('查询支付宝订单失败', 'QUERY_ERROR', 500);
+    }
+  }
+
+  /**
+   * 申请退款
+   */
+  async refund(params: RefundParams): Promise<RefundResult> {
+    try {
+      const outRefundNo = `REFUND_${uuidv4().replace(/-/g, '')}`;
+
+      const result = await this.alipay.request('alipay.trade.refund', {
+        bizContent: {
+          out_trade_no: params.outTradeNo,
+          refund_amount: params.refundAmount.toString(),
+          refund_reason: params.refundReason,
+          out_request_no: outRefundNo,
+        },
+      });
+
+      const refundResponse = result.alipay_trade_refund_response;
+
+      if (refundResponse.code !== '10000') {
+        throw new AppError(
+          `退款失败: ${refundResponse.msg}`,
+          'REFUND_FAILED',
+          400
+        );
+      }
+
+      return {
+        refundNo: outRefundNo,
+        outTradeNo: refundResponse.out_trade_no,
+        refundAmount: parseFloat(refundResponse.refund_amount),
+        refundStatus: 'SUCCESS',
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('申请退款失败', 'REFUND_ERROR', 500);
+    }
+  }
+
+  /**
+   * 验证支付金额
+   */
+  async verifyPaymentAmount(outTradeNo: string, expectedAmount: number): Promise<boolean> {
+    try {
+      const result = await this.queryOrder(outTradeNo);
+      return result.totalAmount === expectedAmount;
+    } catch (error) {
+      return false;
+    }
+  }
+}
+
+// 导出单例
+export const alipayService = new AlipayService();
