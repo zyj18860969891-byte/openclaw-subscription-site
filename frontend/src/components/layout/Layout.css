@@ -1,0 +1,13 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
+
+footer a:hover {
+  color: #1976d2 !important;
+  text-decoration: underline;
+}

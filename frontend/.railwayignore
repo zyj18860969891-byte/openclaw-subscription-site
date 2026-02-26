@@ -1,0 +1,21 @@
+# 忽略文件和目录
+node_modules
+dist
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.git
+.gitignore
+README.md
+Dockerfile
+Dockerfile.railway
+.railwayignore
+.vscode
+.idea
+*.log
+*.tmp
+temp
+coverage
+.nyc_output

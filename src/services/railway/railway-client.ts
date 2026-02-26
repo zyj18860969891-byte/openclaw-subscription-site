@@ -285,6 +285,50 @@ export class RailwayClient {
   }
 
   /**
+   * 创建服务
+   * 在指定项目中创建新服务，可以链接到Git仓库
+   */
+  async createService(
+    projectId: string,
+    name: string,
+    source?: {
+      repo?: string;
+      branch?: string;
+      provider?: string;
+    }
+  ): Promise<RailwayService> {
+    const query = `
+      mutation CreateService($input: CreateServiceInput!) {
+        createService(input: $input) {
+          id
+          name
+          projectId
+          createdAt
+          source {
+            repo
+            branch
+            provider
+          }
+        }
+      }
+    `;
+
+    const data = await this.executeQuery<{ createService: RailwayService }>(query, {
+      input: {
+        projectId,
+        name,
+        source: source || {
+          repo: process.env.RAILWAY_TEMPLATE_REPO || 'https://github.com/yourusername/openclaw-main',
+          branch: process.env.RAILWAY_TEMPLATE_BRANCH || 'main',
+          provider: 'github',
+        },
+      },
+    });
+
+    return data.createService;
+  }
+
+  /**
    * 在服务中设置环境变量
    */
   async setServiceVariables(

@@ -1,0 +1,73 @@
+# OpenClaw 订阅网站 Railway 部署配置
+
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "./frontend/Dockerfile.railway"
+  context = "."
+
+[deploy]
+  startCommand = "bash -c 'echo \"=== 启动订阅网站 ===\"; export NODE_ENV=production; export PORT=${PORT:-3000}; echo \"使用端口: ${PORT:-3000}\"; exec node server.js'"
+  restartPolicyType = "always"
+  restartPolicyMaxRetries = 10
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  
+  # 认证配置
+  JWT_SECRET = "${JWT_SECRET}"
+  JWT_REFRESH_SECRET = "${JWT_REFRESH_SECRET}"
+  
+  # 数据库配置
+  DATABASE_URL = "${DATABASE_URL}"
+  
+  # 支付配置
+  ALIPAY_APP_ID = "${ALIPAY_APP_ID}"
+  ALIPAY_PRIVATE_KEY = "${ALIPAY_PRIVATE_KEY}"
+  ALIPAY_PUBLIC_KEY = "${ALIPAY_PUBLIC_KEY}"
+  ALIPAY_NOTIFY_URL = "${ALIPAY_NOTIFY_URL}"
+  
+  WECHAT_MCHID = "${WECHAT_MCHID}"
+  WECHAT_API_V3_KEY = "${WECHAT_API_V3_KEY}"
+  WECHAT_API_CERT_PATH = "${WECHAT_API_CERT_PATH}"
+  WECHAT_API_KEY_PATH = "${WECHAT_API_KEY_PATH}"
+  WECHAT_NOTIFY_URL = "${WECHAT_NOTIFY_URL}"
+  
+  # Railway 配置
+  RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN}"
+  RAILWAY_ENVIRONMENT = "production"
+  
+  # 应用配置
+  APP_NAME = "OpenClaw订阅网站"
+  APP_VERSION = "1.0.0"
+  APP_URL = "${RAILWAY_PUBLIC_DOMAIN}"
+  
+  # 日志配置
+  LOG_LEVEL = "info"
+  LOG_FORMAT = "json"
+
+[[services]]
+  name = "openclaw-subscription-site"
+  template = "nodejs"
+  
+  [[services.build]]
+    builder = "docker"
+    
+  [[services.deploy]]
+    startCommand = "bash -c 'echo \"=== 启动订阅网站 ===\"; export NODE_ENV=production; export PORT=${PORT:-3000}; echo \"使用端口: ${PORT:-3000}\"; exec node server.js'"
+    memory = "512MB"
+    restart = "always"
+    
+  [[services.healthcheck]]
+    interval = 30
+    timeout = 10
+    path = "/health"
+    port = 3000
+
+[[plugins]]
+  name = "postgres"
+  version = "14"
+
+[[plugins]]
+  name = "redis"
+  version = "7"

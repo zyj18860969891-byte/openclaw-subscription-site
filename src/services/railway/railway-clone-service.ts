@@ -98,12 +98,15 @@ export class RailwayCloneService {
       console.log(`[Clone] 准备${environmentVariables.length}个环境变量`);
 
       // Step 7: 在新项目中创建服务（通过链接Repository）
-      // 注意: 这一步实际上需要通过Railway API创建服务或导入源代码
-      // 为了保持一致性，我们模拟创建过程，实际应用中需要链接Git repo
-      const newService = await this.createServiceFromTemplate(
+      // 使用模板服务的源代码配置来创建新服务
+      const newService = await this.railwayClient.createService(
         newProject.id,
-        templateService,
-        serviceName
+        serviceName,
+        {
+          repo: templateService.source?.repo || process.env.RAILWAY_TEMPLATE_REPO,
+          branch: templateService.source?.branch || process.env.RAILWAY_TEMPLATE_BRANCH || 'main',
+          provider: templateService.source?.provider || 'github',
+        }
       );
       console.log(`[Clone] 服务创建成功: ${newService.id}`);
 
@@ -182,31 +185,6 @@ export class RailwayCloneService {
         errorDetails: errorMessage,
       };
     }
-  }
-
-  /**
-   * 创建服务（从模板）
-   * 注意: 这是一个简化的实现，实际应用需要链接Git repo
-   */
-  private async createServiceFromTemplate(
-    projectId: string,
-    templateService: any,
-    serviceName: string
-  ): Promise<any> {
-    // 在实际应用中，这里应该：
-    // 1. 通过Railway API创建服务并链接Git repo
-    // 2. 或者克隆模板的Git repo配置
-    // 
-    // 为了演示，我们返回一个模拟的服务对象
-    // 实际应用需要根据Railway API文档实现完整的逻辑
-
-    return {
-      id: `service-${Date.now()}`,
-      name: serviceName,
-      projectId,
-      createdAt: new Date().toISOString(),
-      source: templateService.source,
-    };
   }
 
   /**
