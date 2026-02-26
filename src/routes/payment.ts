@@ -73,7 +73,28 @@ router.post(
  */
 router.post('/alipay/notify', async (req: Request, res: Response) => {
   try {
+    // 处理支付宝回调
     await paymentGateway.handleNotify('ALIPAY', req.body);
+    
+    // 如果支付成功，触发自动部署
+    const { out_trade_no } = req.body;
+    if (req.body.trade_status === 'TRADE_SUCCESS') {
+      try {
+        // 这里需要根据订单号找到对应的订阅ID
+        // 在实际实现中，应该在创建支付订单时保存订单号和订阅ID的映射关系
+        console.log(`Payment successful for order: ${out_trade_no}, triggering deployment...`);
+        
+        // TODO: 实现从订单号查找订阅ID的逻辑
+        // const subscriptionId = await findSubscriptionByOrderId(out_trade_no);
+        // if (subscriptionId) {
+        //   await deploymentService.deployNewInstance(subscriptionId);
+        // }
+      } catch (deployError) {
+        console.error('Failed to trigger deployment after payment:', deployError);
+        // 不影响回调处理，只记录错误
+      }
+    }
+    
     return res.json(successResponse({ success: true }, '回调处理成功'));
   } catch (error) {
     console.error('处理支付宝回调失败:', error);
@@ -90,7 +111,26 @@ router.post('/alipay/notify', async (req: Request, res: Response) => {
  */
 router.post('/wechat/notify', async (req: Request, res: Response) => {
   try {
+    // 处理微信回调
     await paymentGateway.handleNotify('WECHAT', req.body);
+    
+    // 如果支付成功，触发自动部署
+    const { out_trade_no } = req.body;
+    if (req.body.trade_state === 'SUCCESS') {
+      try {
+        console.log(`Payment successful for order: ${out_trade_no}, triggering deployment...`);
+        
+        // TODO: 实现从订单号查找订阅ID的逻辑
+        // const subscriptionId = await findSubscriptionByOrderId(out_trade_no);
+        // if (subscriptionId) {
+        //   await deploymentService.deployNewInstance(subscriptionId);
+        // }
+      } catch (deployError) {
+        console.error('Failed to trigger deployment after payment:', deployError);
+        // 不影响回调处理，只记录错误
+      }
+    }
+    
     return res.json(successResponse({ success: true }, '回调处理成功'));
   } catch (error) {
     console.error('处理微信回调失败:', error);

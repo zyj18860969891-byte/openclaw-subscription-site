@@ -14,6 +14,9 @@ import authRoutes from './routes/auth';
 import paymentRoutes from './routes/payment';
 import subscriptionRoutes from './routes/subscription';
 import railwayRoutes from './routes/railway';
+import railwayDeploymentRoutes from './routes/railway-deployment';
+import deploymentRoutes from './routes/deployment';
+import deploymentMonitorRoutes from './routes/deployment-monitor';
 
 // Initialize Express app
 const app: Express = express();
@@ -85,6 +88,15 @@ app.use('/api/subscription', subscriptionRoutes);
 // Railway routes
 app.use('/api/railway', railwayRoutes);
 
+// Railway deployment routes (new automated deployment)
+app.use('/api/railway/deployment', railwayDeploymentRoutes);
+
+// Deployment routes
+app.use('/api/deployment', deploymentRoutes);
+
+// Deployment monitor routes
+app.use('/api/deployment-monitor', deploymentMonitorRoutes);
+
 // ============================================================
 // Error Handling
 // ============================================================
@@ -99,7 +111,10 @@ app.use(errorHandler);
 // Start Server
 // ============================================================
 
-const server = app.listen(PORT, () => {
+// Initialize deployment monitor
+import { deploymentMonitor } from './services/deployment/deployment-monitor';
+
+const server = app.listen(PORT, async () => {
   const env = process.env.NODE_ENV || 'development';
   console.log(`
 ╔════════════════════════════════════════════════════════╗
@@ -110,11 +125,26 @@ const server = app.listen(PORT, () => {
 ║   API: http://localhost:${PORT}/api                     ║
 ╚════════════════════════════════════════════════════════╝
   `);
+
+  // Start deployment monitoring in production
+  if (env === 'production') {
+    try {
+      await deploymentMonitor.startMonitoring();
+      console.log('📊 Deployment monitor started');
+    } catch (error) {
+      console.error('❌ Failed to start deployment monitor:', error);
+    }
+  }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
+  
+  // Stop deployment monitor
+  deploymentMonitor.stopMonitoring();
+  console.log('📊 Deployment monitor stopped');
+  
   server.close(async () => {
     console.log('HTTP server closed');
     // Close database connection if needed
@@ -124,6 +154,11 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
+  
+  // Stop deployment monitor
+  deploymentMonitor.stopMonitoring();
+  console.log('📊 Deployment monitor stopped');
+  
   server.close(async () => {
     console.log('HTTP server closed');
     process.exit(0);

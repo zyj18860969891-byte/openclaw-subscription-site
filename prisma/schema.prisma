@@ -254,3 +254,79 @@ enum InvoiceStatus {
   PAID
   OVERDUE
 }
+
+// ============================================================
+// Railway Instances Table - Railway实例表
+// ============================================================
+model RailwayInstance {
+  id                    String      @id @default(cuid())
+  subscriptionId        String
+  railwayProjectId      String
+  railwayServiceId      String
+  instanceName          String
+  status                RailwayInstanceStatus // 'creating' | 'running' | 'stopped' | 'failed'
+  railwayUrl            String?
+  publicDomain          String?
+  envVariables          Json?
+  
+  // Relations
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  @@index([subscriptionId])
+  @@index([railwayServiceId])
+  @@index([status])
+}
+
+// ============================================================
+// Deployment Logs Table - 部署日志表
+// ============================================================
+model DeploymentLog {
+  id                    String      @id @default(cuid())
+  subscriptionId        String
+  instanceId            String?
+  status                String
+  message               String?
+  error                 String?
+  metadata              Json?
+  
+  // Relations
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  createdAt             DateTime    @default(now())
+  
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Deployment Monitor Logs Table - 部署监控日志表
+// ============================================================
+model DeploymentMonitorLog {
+  id                    String      @id @default(cuid())
+  instanceId            String
+  status                String
+  serviceUrl            String?
+  needsAttention        Boolean     @default(false)
+  errorMessage          String?
+  checkedAt             DateTime    @default(now())
+  
+  @@index([instanceId])
+  @@index([status])
+  @@index([checkedAt])
+}
+
+// ============================================================
+// Railway Instance Status Enum
+// ============================================================
+
+enum RailwayInstanceStatus {
+  CREATING
+  RUNNING
+  STOPPED
+  FAILED
+  TIMEOUT
+}

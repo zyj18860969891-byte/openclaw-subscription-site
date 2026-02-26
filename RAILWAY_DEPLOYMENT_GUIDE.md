@@ -1,4 +1,14 @@
-# OpenClaw 订阅网站 Railway 部署指南
+# OpenClaw 订阅网站 Railway 自动化部署指南
+
+## 📋 概述
+
+本指南介绍如何使用 Railway 自动化部署服务，该服务支持：
+- ✅ 自动克隆模板项目创建新实例
+- ✅ 环境变量自动生成和注入
+- ✅ 支付成功后自动触发部署
+- ✅ 实时部署监控和状态跟踪
+- ✅ 部署日志记录和查询
+- ✅ 错误处理和重试机制
 
 ## 📋 部署前准备
 
@@ -6,6 +16,7 @@
 - [ ] 注册 Railway 账户: https://railway.app
 - [ ] 创建 API Token: Settings → Tokens
 - [ ] 安装 Railway CLI: `npm install -g @railway/cli`
+- [ ] 创建模板项目（用于克隆）
 
 ### 2. 环境变量配置
 在 Railway 项目中设置以下环境变量：
@@ -38,8 +49,21 @@ WECHAT_API_KEY_PATH=/path/to/apiclient_key.pem
 WECHAT_NOTIFY_URL=https://your-domain.com/api/payment/wechat/notify
 ```
 
-#### Railway 配置
+#### Railway 自动化部署配置
 ```bash
+# Railway API Token
+RAILWAY_API_TOKEN=your_railway_api_token_here
+
+# 模板项目ID (需要预先创建)
+RAILWAY_TEMPLATE_PROJECT_ID=your_template_project_id
+
+# 模板服务ID (需要预先创建)
+RAILWAY_TEMPLATE_SERVICE_ID=your_template_service_id
+
+# 加密密钥 (32字符以上)
+ENCRYPTION_KEY=your_encryption_key_min_32_chars
+
+# Railway 公共域名
 RAILWAY_PUBLIC_DOMAIN=your-railway-domain.railway.app
 RAILWAY_ENVIRONMENT=production
 ```
