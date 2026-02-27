@@ -67,7 +67,7 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
-// Root route - redirect to frontend
+// Root route - redirect to frontend login page
 app.get('/', (_req: Request, res: Response) => {
   // Use APP_URL or RAILWAY_PUBLIC_DOMAIN for production, fallback to localhost for development
   let appUrl = process.env.APP_URL;
@@ -81,7 +81,8 @@ app.get('/', (_req: Request, res: Response) => {
     }
   }
   
-  res.redirect(appUrl);
+  // Redirect to login page instead of root to avoid redirect loops
+  res.redirect(`${appUrl}/login`);
 });
 
 // ============================================================
