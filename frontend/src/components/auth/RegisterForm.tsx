@@ -1,124 +1,142 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useAuthStore } from '../../store/authStore';
 import './LoginForm.css';
 
+// Validation schema
+const registerSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+type RegisterFormInput = z.infer<typeof registerSchema>;
+
 export function RegisterForm() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const { register } = useAuthStore();
   const navigate = useNavigate();
+  const { register: registerUser } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError('');
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<RegisterFormInput>({
+    resolver: zodResolver(registerSchema),
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
-    setLoading(true);
+  const onSubmit = async (data: RegisterFormInput) => {
+    setIsLoading(true);
+    setApiError(null);
 
     try {
-      await register(formData.email, formData.password, formData.name);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      await registerUser(data.email, data.password, data.name);
+
+      // Success - redirect to dashboard
+      reset();
+      navigate('/dashboard', { replace: true });
+    } catch (error: any) {
+      // Handle registration error
+      const errorMessage =
+        error.response?.data?.error?.message ||
+        error.message ||
+        'Registration failed. Please try again.';
+      setApiError(errorMessage);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Create Account</h2>
-        <p className="auth-subtitle">Sign up for OpenClaw Subscription</p>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="auth-form">
+    <div className="login-container">
+      <div className="login-card">
+        <h1>Create Account</h1>
+        <p className="login-subtitle">Sign up to get started with OpenClaw</p>
+        
+        {apiError && (
+          <div className="error-message">
+            {apiError}
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label htmlFor="name">Full Name</label>
             <input
               type="text"
               id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              placeholder="Enter your name"
+              {...register('name')}
+              placeholder="Enter your full name"
+              className={errors.name ? 'error' : ''}
             />
+            {errors.name && (
+              <span className="error-text">{errors.name.message}</span>
+            )}
           </div>
-
+          
           <div className="form-group">
-            <label htmlFor="email">Email Address</label>
+            <label htmlFor="email">Email</label>
             <input
               type="email"
               id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
+              {...register('email')}
               placeholder="Enter your email"
+              className={errors.email ? 'error' : ''}
             />
+            {errors.email && (
+              <span className="error-text">{errors.email.message}</span>
+            )}
           </div>
-
+          
           <div className="form-group">
             <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              placeholder="Create a password"
-              minLength={6}
+              {...register('password')}
+              placeholder="Enter your password"
+              className={errors.password ? 'error' : ''}
             />
+            {errors.password && (
+              <span className="error-text">{errors.password.message}</span>
+            )}
           </div>
-
+          
           <div className="form-group">
             <label htmlFor="confirmPassword">Confirm Password</label>
             <input
               type="password"
               id="confirmPassword"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
+              {...register('confirmPassword')}
               placeholder="Confirm your password"
+              className={errors.confirmPassword ? 'error' : ''}
             />
+            {errors.confirmPassword && (
+              <span className="error-text">{errors.confirmPassword.message}</span>
+            )}
           </div>
-
-          <button type="submit" disabled={loading} className="auth-button">
-            {loading ? 'Creating Account...' : 'Sign Up'}
+          
+          <button type="submit" className="login-button" disabled={isLoading}>
+            {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
-
-        <div className="auth-footer">
-          Already have an account? <Link to="/login">Sign in</Link>
+        
+        <div className="login-footer">
+          <p>
+            Already have an account?{' '}
+            <Link to="/login" className="login-link">
+              Sign in
+            </Link>
+          </p>
         </div>
       </div>
     </div>
