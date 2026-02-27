@@ -2,7 +2,7 @@
 
 [build]
   builder = "dockerfile"
-  dockerfilePath = "./Dockerfile.railway"
+  dockerfilePath = "Dockerfile.railway"
   context = "."
 
 [deploy]
