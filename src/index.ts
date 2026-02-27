@@ -70,9 +70,17 @@ app.get('/api/health', (req: Request, res: Response) => {
 // Root route - redirect to frontend
 app.get('/', (_req: Request, res: Response) => {
   // Use APP_URL or RAILWAY_PUBLIC_DOMAIN for production, fallback to localhost for development
-  const appUrl = process.env.APP_URL || 
-                 `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` || 
-                 'http://localhost:5173';
+  let appUrl = process.env.APP_URL;
+  
+  // If APP_URL is not set or is localhost, try RAILWAY_PUBLIC_DOMAIN
+  if (!appUrl || appUrl.includes('localhost')) {
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+      appUrl = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+    } else {
+      appUrl = 'http://localhost:5173';
+    }
+  }
+  
   res.redirect(appUrl);
 });
 

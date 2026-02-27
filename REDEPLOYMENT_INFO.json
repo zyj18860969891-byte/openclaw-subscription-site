@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-02-27T10:24:00.251Z",
+  "changes": [
+    "修复后端根路由重定向问题",
+    "更新前端环境变量 VITE_API_URL",
+    "更新前端 vite 配置",
+    "修复前端 Dockerfile 中的 API 代理"
+  ],
+  "nextSteps": [
+    "等待 Railway 自动重新部署",
+    "或手动触发重新部署",
+    "测试域名访问",
+    "验证支付功能"
+  ],
+  "environmentVariables": {
+    "backend": {
+      "APP_URL": "https://openclaw-subscription-site.up.railway.app",
+      "RAILWAY_PUBLIC_DOMAIN": "openclaw-subscription-site-production.up.railway.app"
+    },
+    "frontend": {
+      "VITE_API_URL": "/api",
+      "BACKEND_URL": "http://localhost:3000"
+    }
+  }
+}
