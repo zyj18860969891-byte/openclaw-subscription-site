@@ -58,6 +58,7 @@ export class WechatService {
   private serialNo: string;
   private apiV3Key: string;
   private notifyUrl: string;
+  private platformCert: string; // 微信支付平台证书（用于验证回调签名）
 
   constructor() {
     // 初始化配置
@@ -67,10 +68,16 @@ export class WechatService {
     this.serialNo = process.env.WECHAT_SERIAL_NO || '';
     this.apiV3Key = process.env.WECHAT_APIV3_KEY || '';
     this.notifyUrl = process.env.WECHAT_NOTIFY_URL || '';
+    this.platformCert = process.env.WECHAT_PLATFORM_CERT || '';
 
     // 验证必需配置
     if (!this.appId || !this.mchId || !this.privateKey || !this.serialNo || !this.apiV3Key) {
       console.warn('⚠️ WeChat Pay credentials not fully configured');
+    }
+
+    // 验证平台证书（用于回调签名验证）
+    if (!this.platformCert) {
+      console.warn('⚠️ WeChat Platform Certificate not configured - callback signature verification disabled');
     }
   }
 
@@ -219,9 +226,23 @@ export class WechatService {
         throw new AppError('微信支付回调缺少签名头', 400, 'WECHAT_MISSING_HEADERS');
       }
 
-      // 验证签名（简化版，实际需要微信支付平台公钥）
-      // 这里我们信任回调，实际生产环境需要验证签名
-      console.log('WeChat callback received, verifying...');
+      // 验证签名（使用平台证书）
+      if (this.platformCert) {
+        const verified = this.verifySignature(
+          signature,
+          timestamp,
+          nonce,
+          JSON.stringify(body),
+          serial
+        );
+
+        if (!verified) {
+          throw new AppError('微信支付回调签名验证失败', 400, 'WECHAT_SIGNATURE_INVALID');
+        }
+        console.log('✅ WeChat callback signature verified successfully');
+      } else {
+        console.warn('⚠️ WeChat Platform Certificate not configured - skipping signature verification');
+      }
 
       const { out_trade_no, trade_state } = body;
 
@@ -253,6 +274,28 @@ export class WechatService {
     } catch (error: any) {
       console.error('WeChat notify handling failed:', error);
       throw new AppError('处理微信支付回调失败', 500, 'WECHAT_NOTIFY_FAILED');
+    }
+  }
+
+  /**
+   * 验证微信支付回调签名
+   */
+  private verifySignature(signature: string, timestamp: string, nonce: string, body: string, serial: string): boolean {
+    try {
+      // 构建验证消息
+      const message = `${timestamp}\n${nonce}\n${body}\n`;
+      
+      // 使用平台证书验证签名
+      const verify = crypto.createVerify('RSA-SHA256');
+      verify.update(message);
+      
+      // 验证签名
+      const isValid = verify.verify(this.platformCert, signature, 'base64');
+      
+      return isValid;
+    } catch (error) {
+      console.error('Signature verification failed:', error);
+      return false;
     }
   }
 
