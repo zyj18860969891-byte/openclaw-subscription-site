@@ -12,20 +12,17 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
-# 安装 pnpm
-RUN npm install -g pnpm
-
-# 复制 package.json 和 pnpm-lock.yaml
-COPY package.json pnpm-lock.yaml* ./
+# 复制 package.json 和 package-lock.json
+COPY package.json package-lock.json* ./
 
 # 安装依赖
-RUN pnpm install --frozen-lockfile
+RUN npm ci --only=production
 
 # 复制源代码
 COPY . .
 
 # 构建应用
-RUN pnpm build
+RUN npm run build
 
 # 创建 server.js 文件用于 Railway
 RUN echo 'const { createServer } = require("http");\nconst { parse } = require("url");\nconst fs = require("fs");\nconst path = require("path");\n\nconst server = createServer(async (req, res) => {\n  const parsedUrl = parse(req.url, true);\n  \n  // 设置 CORS 头\n  res.setHeader("Access-Control-Allow-Origin", "*");\n  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");\n  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");\n  \n  if (req.method === "OPTIONS") {\n    res.writeHead(200);\n    res.end();\n    return;\n  }\n  \n  if (parsedUrl.pathname === "/health") {\n    res.writeHead(200, { "Content-Type": "application/json" });\n    res.end(JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }));\n    return;\n  }\n  \n  // 静态文件服务\n  const filePath = path.join(__dirname, "dist", parsedUrl.pathname);\n  \n  try {\n    if (fs.existsSync(filePath)) {\n      const ext = path.extname(filePath);\n      let contentType = "text/html";\n      \n      switch (ext) {\n        case ".js": contentType = "application/javascript"; break;\n        case ".css": contentType = "text/css"; break;\n        case ".json": contentType = "application/json"; break;\n        case ".png": contentType = "image/png"; break;\n        case ".jpg": contentType = "image/jpeg"; break;\n        case ".gif": contentType = "image/gif"; break;\n      }\n      \n      const fileContent = fs.readFileSync(filePath);\n      res.writeHead(200, { "Content-Type": contentType });\n      res.end(fileContent);\n      return;\n    }\n  } catch (error) {\n    console.error("Static file error:", error);\n  }\n  \n  // API 代理到后端\n  if (parsedUrl.pathname.startsWith("/api/")) {\n    try {\n      const apiResponse = await fetch(`http://localhost:3000${parsedUrl.pathname}${parsedUrl.search}`);\n      const data = await apiResponse.text();\n      \n      res.writeHead(apiResponse.status, { \n        "Content-Type": "application/json",\n        "Access-Control-Allow-Origin": "*"\n      });\n      res.end(data);\n      return;\n    } catch (error) {\n      console.error("API proxy error:", error);\n      res.writeHead(500, { "Content-Type": "application/json" });\n      res.end(JSON.stringify({ error: "Internal server error" }));\n      return;\n    }\n  }\n  \n  // 404\n  res.writeHead(404, { "Content-Type": "text/html" });\n  res.end("<h1>404 - Page Not Found</h1><p>The requested resource was not found.</p>");\n});\n\nconst PORT = process.env.PORT || 3000;\nserver.listen(PORT, () => {\n  console.log(`Server running on port ${PORT}`);\n});\n' > server.js
