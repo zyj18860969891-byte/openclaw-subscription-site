@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-02-27T09:41:41.442Z",
+  "changes": [
+    "更新支付宝服务实现，集成 alipay-sdk",
+    "修复 TypeScript 编译错误",
+    "添加 ALIPAY_PUBLIC_KEY 环境变量",
+    "同步环境变量到本地 .env 文件"
+  ],
+  "nextSteps": [
+    "等待 Railway 自动重新部署",
+    "或手动触发重新部署",
+    "测试支付宝支付流程",
+    "等待用户提供 WECHAT_PLATFORM_CERT"
+  ],
+  "environmentVariables": {
+    "alipay": {
+      "ALIPAY_APP_ID": "2021005185689350",
+      "ALIPAY_PRIVATE_KEY": "已设置 (1624 字符)",
+      "ALIPAY_PUBLIC_KEY": "已设置 (392 字符)",
+      "ALIPAY_GATEWAY_URL": "https://openapi.alipay.com/gateway.do",
+      "ALIPAY_NOTIFY_URL": "https://openclaw-subscription-site-production.up.railway.app/api/payment/alipay/notify"
+    },
+    "wechat": {
+      "WECHAT_APP_ID": "zyj18860969891",
+      "WECHAT_MCH_ID": "1725799770",
+      "WECHAT_APIV3_KEY": "已设置",
+      "WECHAT_API_KEY": "已设置",
+      "WECHAT_SERIAL_NO": "2660E9B1BC25E6F60E2FFB294DC42B4C5229EB08",
+      "WECHAT_NOTIFY_URL": "已设置",
+      "WECHAT_PRIVATE_KEY": "已设置 (27 字符)",
+      "WECHAT_PLATFORM_CERT": "未设置"
+    }
+  }
+}
