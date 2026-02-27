@@ -67,6 +67,7 @@ model Subscription {
   // Relations
   payments              Payment[]
   railwayInstances      RailwayInstance[]
+  deploymentLogs        DeploymentLog[]
   
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
