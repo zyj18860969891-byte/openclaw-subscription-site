@@ -18,6 +18,9 @@ RUN npx prisma generate
 # 复制源代码
 COPY . .
 
+# 构建前端
+RUN cd frontend && npm ci && npm run build
+
 # 构建应用
 RUN npm run build
 
@@ -44,6 +47,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # 从构建阶段复制编译后的文件
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/frontend/dist ./frontend/dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # 创建非root用户
