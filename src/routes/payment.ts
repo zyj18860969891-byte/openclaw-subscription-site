@@ -111,33 +111,15 @@ router.post('/alipay/notify', async (req: Request, res: Response) => {
  */
 router.post('/wechat/notify', async (req: Request, res: Response) => {
   try {
-    // 处理微信回调
-    await paymentGateway.handleNotify('WECHAT', req.body);
+    // 处理微信回调（传递headers用于签名验证）
+    await paymentGateway.handleNotify('WECHAT', req.body, req.headers);
     
-    // 如果支付成功，触发自动部署
-    const { out_trade_no } = req.body;
-    if (req.body.trade_state === 'SUCCESS') {
-      try {
-        console.log(`Payment successful for order: ${out_trade_no}, triggering deployment...`);
-        
-        // TODO: 实现从订单号查找订阅ID的逻辑
-        // const subscriptionId = await findSubscriptionByOrderId(out_trade_no);
-        // if (subscriptionId) {
-        //   await deploymentService.deployNewInstance(subscriptionId);
-        // }
-      } catch (deployError) {
-        console.error('Failed to trigger deployment after payment:', deployError);
-        // 不影响回调处理，只记录错误
-      }
-    }
-    
-    return res.json(successResponse({ success: true }, '回调处理成功'));
+    // 微信支付要求返回空XML响应
+    res.status(200).send('<xml><return_code><![CDATA[SUCCESS]]></return_code><return_msg><![CDATA[OK]]></return_msg></xml>');
   } catch (error) {
-    console.error('处理微信回调失败:', error);
-    if (error instanceof AppError) {
-      return res.status(error.statusCode).json(errorResponse(error.message, error.code));
-    }
-    return res.status(500).json(errorResponse('处理回调失败', 'INTERNAL_ERROR'));
+    console.error('WeChat notify error:', error);
+    // 微信支付要求返回失败XML响应
+    res.status(500).send('<xml><return_code><![CDATA[FAIL]]></return_code><return_msg><![CDATA[ERROR]]></return_msg></xml>');
   }
 });
 

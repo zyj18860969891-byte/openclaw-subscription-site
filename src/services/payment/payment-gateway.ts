@@ -158,24 +158,33 @@ export class PaymentGateway {
   /**
    * 处理支付回调
    */
-  async handleNotify(method: PaymentMethod, data: any): Promise<boolean> {
+  async handleNotify(method: PaymentMethod, data: any, headers?: any): Promise<boolean> {
     try {
       // Use method parameter if needed for different payment gateways
       console.log(`Handling ${method} payment notification`);
       
-      const { out_trade_no, trade_status } = data;
+      // 微信支付需要验证签名
+      if (method === 'WECHAT') {
+        const verified = await this.wechat.handleNotify(data, headers || {});
+        if (!verified) {
+          throw new AppError('微信支付回调验证失败', 400, 'WECHAT_NOTIFY_VERIFY_FAILED');
+        }
+      }
+
+      const { out_trade_no, trade_status, trade_state } = data;
+      const status = trade_status === 'TRADE_SUCCESS' || trade_status === 'SUCCESS' || trade_state === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
 
       // 更新支付状态
       await prisma.payment.update({
         where: { orderId: out_trade_no },
         data: {
-          status: trade_status === 'TRADE_SUCCESS' || trade_status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+          status,
           notifyTime: new Date(),
         },
       });
 
       // 如果支付成功，触发订阅激活和实例部署
-      if (trade_status === 'TRADE_SUCCESS' || trade_status === 'SUCCESS') {
+      if (status === 'SUCCESS') {
         await this.handleSuccessfulPayment(out_trade_no);
       }
 
