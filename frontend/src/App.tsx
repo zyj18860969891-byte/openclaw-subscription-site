@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { LoginForm } from './components/auth/LoginForm';
+import { RegisterForm } from './components/auth/RegisterForm';
 import { PricingPage } from './components/pricing/PricingPage';
 import { SubscribePage } from './components/subscription/SubscribePage';
 import { PaymentPage } from './components/payment/PaymentPage';
@@ -32,6 +33,17 @@ function LoginRoute() {
   return <LoginForm />;
 }
 
+// Register route component (redirect to dashboard if already authenticated)
+function RegisterRoute() {
+  const { isAuthenticated } = useAuthStore();
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <RegisterForm />;
+}
+
 // NotFound component
 function NotFound() {
   return (
@@ -55,6 +67,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
+        <Route path="/register" element={<RegisterRoute />} />
         <Route
           path="/dashboard"
           element={
