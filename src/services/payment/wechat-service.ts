@@ -220,9 +220,8 @@ export class WechatService {
       const signature = headers['wechatpay-signature'];
       const timestamp = headers['wechatpay-timestamp'];
       const nonce = headers['wechatpay-nonce'];
-      const serial = headers['wechatpay-serial'];
 
-      if (!signature || !timestamp || !nonce || !serial) {
+      if (!signature || !timestamp || !nonce) {
         throw new AppError('微信支付回调缺少签名头', 400, 'WECHAT_MISSING_HEADERS');
       }
 
@@ -232,8 +231,7 @@ export class WechatService {
           signature,
           timestamp,
           nonce,
-          JSON.stringify(body),
-          serial
+          JSON.stringify(body)
         );
 
         if (!verified) {
@@ -280,7 +278,7 @@ export class WechatService {
   /**
    * 验证微信支付回调签名
    */
-  private verifySignature(signature: string, timestamp: string, nonce: string, body: string, serial: string): boolean {
+  private verifySignature(signature: string, timestamp: string, nonce: string, body: string): boolean {
     try {
       // 构建验证消息
       const message = `${timestamp}\n${nonce}\n${body}\n`;
