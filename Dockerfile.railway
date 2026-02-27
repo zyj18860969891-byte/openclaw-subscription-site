@@ -5,8 +5,9 @@ FROM node:22-bookworm AS builder
 
 WORKDIR /app
 
-# 复制package文件
+# 复制package文件和prisma目录
 COPY package*.json ./
+COPY prisma ./prisma/
 
 # 安装依赖
 RUN npm ci --only=production
