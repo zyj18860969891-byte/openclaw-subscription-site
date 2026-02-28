@@ -127,6 +127,19 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       return;
     }
 
+    console.log('🔍 [Railway] 开始数据库连接检查');
+    try {
+      await prisma.$connect();
+      console.log('✅ [Railway] 数据库连接正常');
+    } catch (dbError) {
+      console.error('❌ [Railway] 数据库连接失败:', dbError);
+      res.status(500).json({
+        success: false,
+        message: 'Database connection failed',
+      });
+      return;
+    }
+
     console.log('🔍 [Railway] 开始数据库查询');
     const startTime = Date.now();
     
