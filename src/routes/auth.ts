@@ -38,7 +38,7 @@ router.post(
       const user = await userService.createUser({
         email,
         password,
-        fullName: name,
+        name,
       });
 
       // 生成令牌
@@ -51,7 +51,7 @@ router.post(
             user: {
               id: user.id,
               email: user.email,
-              fullName: user.fullName,
+              name: user.name,
             },
             ...tokens,
           },
@@ -116,7 +116,7 @@ router.post(
             user: {
               id: user.id,
               email: user.email,
-              fullName: user.fullName,
+              name: user.name,
               subscriptionStatus: user.subscriptionStatus,
               subscriptionPlan: user.subscriptionPlan,
             },
@@ -240,7 +240,7 @@ router.get(
           {
             id: user.id,
             email: user.email,
-            fullName: user.fullName,
+            name: user.name,
             avatarUrl: user.avatarUrl,
             subscriptionStatus: user.subscriptionStatus,
             subscriptionPlan: user.subscriptionPlan,
@@ -267,7 +267,7 @@ router.get(
 router.put(
   '/profile',
   authMiddleware,
-  [body('fullName').optional().isString().trim()],
+  [body('name').optional().isString().trim()],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -281,10 +281,10 @@ router.put(
         throw new AuthenticationError('认证信息缺失');
       }
 
-      const { fullName } = req.body;
+      const { name } = req.body;
 
       const user = await userService.updateUser(req.user.userId, {
-        fullName,
+        name,
       });
 
       return res.json(
@@ -292,7 +292,7 @@ router.put(
           {
             id: user.id,
             email: user.email,
-            fullName: user.fullName,
+            name: user.name,
             avatarUrl: user.avatarUrl,
           },
           '用户信息更新成功',

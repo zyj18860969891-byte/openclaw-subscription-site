@@ -32,9 +32,9 @@ export class UserService {
   async createUser(data: {
     email: string;
     password: string;
-    fullName?: string;
+    name?: string;
   }): Promise<User> {
-    console.log('🔍 [UserService] 开始创建用户:', { email: data.email, fullName: data.fullName });
+    console.log('🔍 [UserService] 开始创建用户:', { email: data.email, name: data.name });
     
     // 检查数据库连接状态
     try {
@@ -70,7 +70,7 @@ export class UserService {
         data: {
           email: data.email.toLowerCase(),
           passwordHash,
-          fullName: data.fullName,
+          name: data.name,
         },
       });
       

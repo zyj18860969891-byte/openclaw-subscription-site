@@ -51,9 +51,9 @@ const apiCall = async (endpoint: string, data: any = null) => {
 
   const url = `${import.meta.env.VITE_API_URL || '/api'}${endpoint}`;
   
-  // 明确设置 POST 方法，而不是基于 data 存在来判断
+  // 根据是否有数据来决定使用 POST 还是 GET 方法
   const options: RequestInit = {
-    method: 'POST',  // 修复：总是使用 POST 方法
+    method: data ? 'POST' : 'GET',
     headers,
   };
 
