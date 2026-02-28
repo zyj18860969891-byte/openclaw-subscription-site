@@ -114,8 +114,12 @@ router.post(
  */
 router.get('/instances', authMiddleware, async (req: Request, res: Response) => {
   try {
+    console.log('🔍 [Railway] 开始获取实例列表');
     const userId = (req as any).user?.id;
+    console.log('🔍 [Railway] 用户ID:', userId);
+    
     if (!userId) {
+      console.log('❌ [Railway] 用户未认证');
       res.status(401).json({
         success: false,
         message: 'User not authenticated',
@@ -123,6 +127,9 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       return;
     }
 
+    console.log('🔍 [Railway] 开始数据库查询');
+    const startTime = Date.now();
+    
     const instances = await prisma.railwayInstance.findMany({
       where: {
         userId,
@@ -143,6 +150,9 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
         createdAt: 'desc',
       },
     });
+
+    const queryTime = Date.now() - startTime;
+    console.log(`✅ [Railway] 数据库查询完成，耗时: ${queryTime}ms，找到 ${instances.length} 个实例`);
 
     res.json({
       success: true,

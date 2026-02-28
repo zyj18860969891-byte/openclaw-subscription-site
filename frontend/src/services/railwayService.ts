@@ -63,8 +63,19 @@ export const railwayService = {
    * 获取当前用户的所有实例
    */
   async getInstances(): Promise<RailwayInstance[]> {
-    const response = await apiClient.get('/railway/instances');
-    return response.data.data;
+    console.log('🔍 [RailwayService] 开始获取实例列表');
+    const startTime = Date.now();
+    
+    try {
+      const response = await apiClient.get('/railway/instances');
+      const queryTime = Date.now() - startTime;
+      console.log(`✅ [RailwayService] 实例列表获取成功，耗时: ${queryTime}ms，数量: ${response.data.data?.length || 0}`);
+      return response.data.data;
+    } catch (error: any) {
+      const queryTime = Date.now() - startTime;
+      console.error(`❌ [RailwayService] 实例列表获取失败，耗时: ${queryTime}ms`, error);
+      throw error;
+    }
   },
 
   /**
