@@ -17,7 +17,7 @@ router.post(
   [
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 8 }),
-    body('fullName').optional().isString().trim(),
+    body('name').optional().isString().trim(),
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -32,13 +32,13 @@ router.post(
         );
       }
 
-      const { email, password, fullName } = req.body;
+      const { email, password, name } = req.body;
 
       // 创建用户
       const user = await userService.createUser({
         email,
         password,
-        fullName,
+        fullName: name,
       });
 
       // 生成令牌
