@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { userService } from '../services/auth/user-service';
 import { jwtService } from '../utils/jwt';
 import { successResponse, errorResponse } from '../utils/response';
-import { AuthenticationError, ValidationError, NotFoundError } from '../utils/errors';
+import { AuthenticationError, ValidationError, NotFoundError, ConflictError } from '../utils/errors';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -60,8 +60,8 @@ router.post(
         )
       );
     } catch (error) {
-      if (error instanceof ValidationError || error instanceof AuthenticationError) {
-        return res.status(400).json(
+      if (error instanceof ValidationError || error instanceof AuthenticationError || error instanceof ConflictError) {
+        return res.status(error instanceof ConflictError ? 409 : 400).json(
           errorResponse(error.message, error.code)
         );
       }
