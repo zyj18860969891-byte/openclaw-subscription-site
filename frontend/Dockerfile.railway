@@ -22,7 +22,7 @@ RUN npm ci
 COPY .env .env
 
 # 设置构建环境变量
-ARG VITE_API_URL=/api
+ARG VITE_API_URL=${RAILWAY_PUBLIC_DOMAIN}/api
 ENV VITE_API_URL=${VITE_API_URL}
 
 # 复制源代码
