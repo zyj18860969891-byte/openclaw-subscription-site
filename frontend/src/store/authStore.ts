@@ -51,8 +51,9 @@ const apiCall = async (endpoint: string, data: any = null) => {
 
   const url = `${import.meta.env.VITE_API_URL || '/api'}${endpoint}`;
   
+  // 明确设置 POST 方法，而不是基于 data 存在来判断
   const options: RequestInit = {
-    method: data ? 'POST' : 'GET',
+    method: 'POST',  // 修复：总是使用 POST 方法
     headers,
   };
 
@@ -60,10 +61,25 @@ const apiCall = async (endpoint: string, data: any = null) => {
     options.body = JSON.stringify(data);
   }
 
+  console.log('API Request:', {
+    url,
+    method: options.method,
+    hasData: !!data,
+    data: data ? JSON.stringify(data) : null,
+    headers
+  });
+
   const response = await fetch(url, options);
+  
+  console.log('API Response:', {
+    status: response.status,
+    statusText: response.statusText,
+    url: response.url
+  });
   
   if (!response.ok) {
     const error = await response.json();
+    console.error('API Error:', error);
     throw new Error(error.message || 'API request failed');
   }
 
