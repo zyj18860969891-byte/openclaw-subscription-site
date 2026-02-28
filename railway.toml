@@ -37,7 +37,7 @@
   WECHAT_NOTIFY_URL = "${WECHAT_NOTIFY_URL}"
   
   # Railway 配置
-RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN}"
+RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN:-openclaw-subscription-site-production.up.railway.app}"
   
   # 前端环境变量
   VITE_API_URL = "${RAILWAY_PUBLIC_DOMAIN}/api"

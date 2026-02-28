@@ -99,10 +99,13 @@ router.post(
       const { email, password } = req.body;
 
       // 验证用户凭证
+      console.log('🔍 [Auth] 开始验证用户凭证:', { email });
       const user = await userService.verifyCredentials(email, password);
+      console.log('✅ [Auth] 用户凭证验证成功:', { id: user.id, email: user.email });
 
       // 生成令牌
       const tokens = jwtService.generateTokenPair(user.id, user.email);
+      console.log('✅ [Auth] 令牌生成成功');
 
       return res.json(
         successResponse(

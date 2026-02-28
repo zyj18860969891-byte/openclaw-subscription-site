@@ -34,48 +34,64 @@ export class UserService {
     password: string;
     fullName?: string;
   }): Promise<User> {
+    console.log('🔍 [UserService] 开始创建用户:', { email: data.email, fullName: data.fullName });
+    
     // 检查邮箱是否已存在
     const existingUser = await this.getUserByEmail(data.email);
     if (existingUser) {
+      console.log('❌ [UserService] 邮箱已被注册:', data.email);
       throw new ConflictError('该邮箱已被注册');
     }
 
     // 验证密码强度
     const passwordValidation = passwordService.validatePasswordStrength(data.password);
     if (!passwordValidation.isValid) {
+      console.log('❌ [UserService] 密码强度不足:', passwordValidation.message);
       throw new ValidationError(passwordValidation.message);
     }
 
     // 加密密码
     const passwordHash = await passwordService.hashPassword(data.password);
+    console.log('✅ [UserService] 密码加密成功');
 
     // 创建用户
-    return await prisma.user.create({
+    console.log('🔍 [UserService] 开始在数据库中创建用户...');
+    const user = await prisma.user.create({
       data: {
         email: data.email.toLowerCase(),
         passwordHash,
         fullName: data.fullName,
       },
     });
+    
+    console.log('✅ [UserService] 用户创建成功:', { id: user.id, email: user.email });
+    return user;
   }
 
   /**
    * 验证用户凭证
    */
   async verifyCredentials(email: string, password: string): Promise<User> {
+    console.log('🔍 [UserService] 开始查找用户:', { email });
     const user = await this.getUserByEmail(email);
+    
     if (!user) {
+      console.log('❌ [UserService] 用户不存在:', { email });
       throw new NotFoundError('用户不存在');
     }
 
+    console.log('🔍 [UserService] 用户找到，开始验证密码:', { id: user.id, email: user.email });
     const isPasswordValid = await passwordService.verifyPassword(
       password,
       user.passwordHash
     );
+    
     if (!isPasswordValid) {
+      console.log('❌ [UserService] 密码不正确:', { id: user.id });
       throw new ValidationError('密码不正确');
     }
 
+    console.log('✅ [UserService] 密码验证成功:', { id: user.id, email: user.email });
     return user;
   }
 

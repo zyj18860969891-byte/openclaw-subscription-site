@@ -100,6 +100,18 @@ app.get('/', (_req: Request, res: Response) => {
   res.redirect(`${appUrl}/login`);
 });
 
+// Debug route to check environment variables
+app.get('/debug/env', (_req: Request, res: Response) => {
+  res.json({
+    PORT: process.env.PORT,
+    RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN,
+    APP_URL: process.env.APP_URL,
+    VITE_API_URL: process.env.VITE_API_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ============================================================
 // API Routes
 // ============================================================
@@ -144,13 +156,16 @@ import { deploymentMonitor } from './services/deployment/deployment-monitor';
 
 const server = app.listen(PORT, async () => {
   const env = process.env.NODE_ENV || 'development';
+  const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost';
   console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║   🚀 OpenClaw Subscription Site Server                  ║
 ╠════════════════════════════════════════════════════════╣
 ║   Environment: ${env.padEnd(36)}║
-║   Server: http://localhost:${PORT}                      ║
-║   API: http://localhost:${PORT}/api                     ║
+║   Railway Domain: ${railwayDomain.padEnd(36)}║
+║   Server Port: ${String(PORT).padEnd(36)}║
+║   API: https://${railwayDomain}/api                     ║
+║   Debug: https://${railwayDomain}/debug/env             ║
 ╚════════════════════════════════════════════════════════╝
   `);
 
