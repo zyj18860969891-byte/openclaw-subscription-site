@@ -13,22 +13,44 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
+    // 延迟加载数据，避免阻塞页面渲染
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [sub, inst] = await Promise.all([
-        subscriptionService.getCurrentSubscription(),
-        railwayService.getInstances(),
-      ]);
+      setError(null);
+      
+      // 分别调用 API，避免一个失败影响另一个
+      const subPromise = subscriptionService.getCurrentSubscription();
+      const instPromise = railwayService.getInstances();
+      
+      // 设置超时
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 10000);
+      });
+      
+      const sub = await Promise.race([subPromise, timeoutPromise]);
+      const inst = await Promise.race([instPromise, timeoutPromise]);
+      
       setSubscription(sub);
       setInstances(inst);
-      setError(null);
     } catch (err: any) {
-      setError('Failed to load dashboard data');
-      console.error(err);
+      console.error('Dashboard fetch error:', err);
+      
+      // 根据错误类型设置不同的错误消息
+      if (err.message === 'Request timeout') {
+        setError('Some data is loading slowly. Please try refreshing in a moment.');
+      } else if (err.response?.status === 404) {
+        setError('Some services are temporarily unavailable. Please try again later.');
+      } else {
+        setError('Failed to load dashboard data. Some features may be limited.');
+      }
     } finally {
       setLoading(false);
     }
