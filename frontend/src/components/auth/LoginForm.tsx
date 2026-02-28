@@ -41,11 +41,24 @@ export function LoginForm() {
       reset();
       navigate('/dashboard', { replace: true });
     } catch (error: any) {
-      // Handle login error
-      const errorMessage =
-        error.response?.data?.error?.message ||
-        error.message ||
-        'Login failed. Please try again.';
+      // Handle login error with specific messages
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.message) {
+        // Map specific error messages to user-friendly ones
+        if (error.message.includes('email') || error.message.includes('user')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('password')) {
+          errorMessage = 'Invalid password. Please check your password and try again.';
+        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       setApiError(errorMessage);
     } finally {
       setIsLoading(false);

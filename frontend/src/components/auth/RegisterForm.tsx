@@ -45,11 +45,24 @@ export function RegisterForm() {
       reset();
       navigate('/dashboard', { replace: true });
     } catch (error: any) {
-      // Handle registration error
-      const errorMessage =
-        error.response?.data?.error?.message ||
-        error.message ||
-        'Registration failed. Please try again.';
+      // Handle registration error with specific messages
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.message) {
+        // Map specific error messages to user-friendly ones
+        if (error.message.includes('email')) {
+          errorMessage = 'This email is already registered. Please use a different email or try logging in.';
+        } else if (error.message.includes('password')) {
+          errorMessage = 'Password does not meet the requirements. Please include uppercase, lowercase, and special characters.';
+        } else if (error.message.includes('network') || error.message.includes('timeout')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       setApiError(errorMessage);
     } finally {
       setIsLoading(false);
