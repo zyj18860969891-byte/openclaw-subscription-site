@@ -36,6 +36,15 @@ export class UserService {
   }): Promise<User> {
     console.log('🔍 [UserService] 开始创建用户:', { email: data.email, fullName: data.fullName });
     
+    // 检查数据库连接状态
+    try {
+      await prisma.$connect();
+      console.log('✅ [UserService] 数据库连接正常');
+    } catch (error) {
+      console.log('❌ [UserService] 数据库连接失败:', error);
+      throw new Error('数据库连接失败');
+    }
+    
     // 检查邮箱是否已存在
     const existingUser = await this.getUserByEmail(data.email);
     if (existingUser) {
@@ -56,16 +65,21 @@ export class UserService {
 
     // 创建用户
     console.log('🔍 [UserService] 开始在数据库中创建用户...');
-    const user = await prisma.user.create({
-      data: {
-        email: data.email.toLowerCase(),
-        passwordHash,
-        fullName: data.fullName,
-      },
-    });
-    
-    console.log('✅ [UserService] 用户创建成功:', { id: user.id, email: user.email });
-    return user;
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email: data.email.toLowerCase(),
+          passwordHash,
+          fullName: data.fullName,
+        },
+      });
+      
+      console.log('✅ [UserService] 用户创建成功:', { id: user.id, email: user.email });
+      return user;
+    } catch (error) {
+      console.log('❌ [UserService] 用户创建失败:', error);
+      throw error;
+    }
   }
 
   /**

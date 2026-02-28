@@ -21,9 +21,12 @@ router.post(
   ],
   async (req: AuthenticatedRequest, res: Response) => {
     try {
+      console.log('🔍 [Auth] 开始注册请求:', req.body);
+      
       // 验证请求参数
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
+        console.log('❌ [Auth] 参数验证失败:', errors.array());
         return res.status(400).json(
           errorResponse('参数验证失败', 'VALIDATION_ERROR', errors.array())
         );
