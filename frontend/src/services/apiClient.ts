@@ -29,12 +29,14 @@ apiClient.interceptors.request.use(
       baseURL: config.baseURL,
       fullURL: `${config.baseURL}${config.url}`,
       hasToken: !!token,
+      headers: config.headers,
+      timeout: config.timeout,
     });
     
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
