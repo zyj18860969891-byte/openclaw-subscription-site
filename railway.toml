@@ -20,7 +20,7 @@
   
   # 数据库配置
   # Railway 会自动注入数据库连接信息
-  DATABASE_URL = "${DATABASE_URL:-postgresql://postgres:password@shinkansen.proxy.rlwy.net:27692/railway}"
+  DATABASE_URL = "${DATABASE_URL}"
   
   # 支付配置
   ALIPAY_APP_ID = "${ALIPAY_APP_ID}"
@@ -38,7 +38,7 @@
   WECHAT_NOTIFY_URL = "${WECHAT_NOTIFY_URL}"
   
   # Railway 配置
-RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN:-openclaw-subscription-site-production.up.railway.app}"
+  RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN}"
   
   # 前端环境变量
   VITE_API_URL = "${RAILWAY_PUBLIC_DOMAIN}/api"
@@ -51,29 +51,3 @@ RAILWAY_PUBLIC_DOMAIN = "${RAILWAY_PUBLIC_DOMAIN:-openclaw-subscription-site-pro
   # 日志配置
   LOG_LEVEL = "debug"
   LOG_FORMAT = "json"
-
-[[services]]
-  name = "openclaw-subscription-site"
-  template = "nodejs"
-  
-  [[services.build]]
-    builder = "docker"
-    
-  [[services.deploy]]
-    startCommand = "bash -c 'echo \"=== 启动订阅网站 ===\"; export NODE_ENV=production; export PORT=${PORT:-3000}; echo \"使用端口: ${PORT:-3000}\"; exec node server.js'"
-    memory = "512MB"
-    restart = "always"
-    
-  [[services.healthcheck]]
-    interval = 30
-    timeout = 10
-    path = "/health"
-    port = 3000
-
-[[plugins]]
-  name = "postgres"
-  version = "14"
-
-[[plugins]]
-  name = "redis"
-  version = "7"
