@@ -21,6 +21,15 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    console.log('🔍 [API Client] 发送请求:', {
+      url: config.url,
+      method: config.method,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      hasToken: !!token,
+    });
+    
     return config;
   },
   (error) => {
@@ -31,8 +40,24 @@ apiClient.interceptors.request.use(
 
 // 响应拦截器 - 处理认证错误（使用localStorage避免循环依赖）
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ [API Client] 收到响应:', {
+      url: response.config.url,
+      method: response.config.method,
+      status: response.status,
+      statusText: response.statusText,
+    });
+    return response;
+  },
   async (error) => {
+    console.error('❌ [API Client] 响应错误:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      error: error.message,
+    });
+    
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
