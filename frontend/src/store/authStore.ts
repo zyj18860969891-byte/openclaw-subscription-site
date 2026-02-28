@@ -49,7 +49,7 @@ const apiCall = async (endpoint: string, data: any = null) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const url = `http://localhost:3000/api${endpoint}`;
+  const url = `${import.meta.env.VITE_API_URL || '/api'}${endpoint}`;
   
   const options: RequestInit = {
     method: data ? 'POST' : 'GET',
