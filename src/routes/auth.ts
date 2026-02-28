@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { userService } from '../services/auth/user-service';
 import { jwtService } from '../utils/jwt';
 import { successResponse, errorResponse } from '../utils/response';
-import { AuthenticationError, ValidationError } from '../utils/errors';
+import { AuthenticationError, ValidationError, NotFoundError } from '../utils/errors';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -129,6 +129,12 @@ router.post(
 
       if (error instanceof AuthenticationError) {
         return res.status(401).json(
+          errorResponse(error.message, error.code)
+        );
+      }
+
+      if (error instanceof NotFoundError) {
+        return res.status(404).json(
           errorResponse(error.message, error.code)
         );
       }
