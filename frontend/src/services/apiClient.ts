@@ -2,7 +2,8 @@ import axios from 'axios';
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
 // API基础URL - 从环境变量获取或使用默认值
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// 在 Railway 环境中，VITE_API_URL 应该被正确设置
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://openclaw-subscription-site-production.up.railway.app/api';
 
 // 创建单例实例
 export const apiClient = axios.create({
