@@ -49,7 +49,10 @@ const apiCall = async (endpoint: string, data: any = null) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const url = `${import.meta.env.VITE_API_URL || '/api'}${endpoint}`;
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+    // 移除 baseUrl 末尾的 /api 如果存在
+    const cleanBaseUrl = baseUrl.replace(/\/api$/, '');
+    const url = `${cleanBaseUrl}${endpoint}`;
   
   // 根据是否有数据来决定使用 POST 还是 GET 方法
   const options: RequestInit = {
