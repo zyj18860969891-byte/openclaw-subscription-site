@@ -19,7 +19,8 @@
   JWT_REFRESH_SECRET = "${JWT_REFRESH_SECRET}"
   
   # 数据库配置
-  DATABASE_URL = "${DATABASE_URL}"
+  # Railway 会自动注入数据库连接信息
+  DATABASE_URL = "${DATABASE_URL:-postgresql://postgres:password@shinkansen.proxy.rlwy.net:27692/railway}"
   
   # 支付配置
   ALIPAY_APP_ID = "${ALIPAY_APP_ID}"
