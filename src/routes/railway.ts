@@ -132,6 +132,7 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
     const startTime = Date.now();
     
     // 优化查询：限制返回数量，避免大数据集
+    // 使用索引提示（如果PostgreSQL支持）
     const instances = await prisma.railwayInstance.findMany({
       where: {
         userId,
@@ -156,6 +157,11 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
 
     const queryTime = Date.now() - startTime;
     console.log(`✅ [Railway] 数据库查询完成，耗时: ${queryTime}ms，找到 ${instances.length} 个实例`);
+
+    // 如果查询太慢，记录警告
+    if (queryTime > 1000) {
+      console.warn(`⚠️ [Railway] 查询耗时过长 (${queryTime}ms)，请检查数据库索引和连接`);
+    }
 
     res.json({
       success: true,

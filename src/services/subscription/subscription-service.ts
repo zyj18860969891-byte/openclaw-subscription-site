@@ -148,7 +148,10 @@ export class SubscriptionService {
    */
   async getUserSubscription(userId: string): Promise<SubscriptionInfo | null> {
     try {
+      const startTime = Date.now();
+      
       // 优化查询：只获取最新的活跃订阅
+      // 使用复合索引: [userId, status, createdAt]
       const subscription = await prisma.subscription.findFirst({
         where: { 
           userId: userId,
@@ -159,6 +162,14 @@ export class SubscriptionService {
         },
         take: 1, // 明确限制只取1条
       });
+
+      const queryTime = Date.now() - startTime;
+      
+      if (queryTime > 1000) {
+        console.warn(`⚠️ [Subscription] 查询用户订阅耗时过长 (${queryTime}ms), userId: ${userId}`);
+      } else {
+        console.log(`✅ [Subscription] 查询用户订阅完成，耗时: ${queryTime}ms`);
+      }
 
       if (!subscription) {
         return null;
