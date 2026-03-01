@@ -27,7 +27,7 @@ router.get('/status/:subscriptionId', authMiddleware, async (req, res, next) => 
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.userId !== userId) {
+    if (subscription.user.id !== userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -65,7 +65,7 @@ router.post('/trigger', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.userId !== (req as any).user?.userId) {
+    if (subscription.user.id !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -109,7 +109,7 @@ router.post('/retry', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.userId !== (req as any).user?.userId) {
+    if (subscription.user.id !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -147,7 +147,7 @@ router.delete('/cancel', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.userId !== (req as any).user?.userId) {
+    if (subscription.user.id !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -182,7 +182,7 @@ router.get('/logs/:subscriptionId', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.userId !== userId) {
+    if (subscription.user.id !== userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
