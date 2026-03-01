@@ -193,7 +193,7 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       console.warn(`⚠️ [Railway] 查询耗时过长 (${queryTime}ms)，请检查数据库索引和连接`);
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: instances,
       count: instances.length,
@@ -204,7 +204,7 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
     
     // 如果是超时错误，尝试返回缓存（即使过期）
     if (error.message === 'Database query timeout') {
-      const cacheKey = `railway_instances:${userId}`;
+      const cacheKey = `railway_instances:${(req as any).user?.userId}`;
       const cached = instanceCache.get(cacheKey);
       if (cached) {
         console.warn('⚠️ [Railway] 查询超时，返回过期缓存数据');
@@ -218,7 +218,7 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       }
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Failed to fetch instances',
       error: error instanceof Error ? error.message : 'Unknown error',
