@@ -75,6 +75,8 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@index([endDate])
+  @@index([userId, createdAt]) // 复合索引：按用户和时间排序查询
+  @@index([userId, status, createdAt]) // 复合索引：按用户、状态和时间查询
 }
 
 // ============================================================
