@@ -148,9 +148,16 @@ export class SubscriptionService {
    */
   async getUserSubscription(userId: string): Promise<SubscriptionInfo | null> {
     try {
+      // 优化查询：只获取最新的活跃订阅
       const subscription = await prisma.subscription.findFirst({
-        where: { userId: userId },
-        orderBy: { createdAt: 'desc' },
+        where: { 
+          userId: userId,
+          status: 'ACTIVE' // 只查找活跃订阅，减少结果集
+        },
+        orderBy: { 
+          createdAt: 'desc',
+        },
+        take: 1, // 明确限制只取1条
       });
 
       if (!subscription) {
