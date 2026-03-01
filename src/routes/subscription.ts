@@ -58,7 +58,7 @@ router.get('/plans/:plan', (req: Request, res: Response) => {
  */
 router.get('/current', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.userId;
 
     const subscription = await subscriptionService.getUserSubscription(userId);
 
@@ -100,7 +100,7 @@ router.post(
         throw new ValidationError('参数验证失败');
       }
 
-      const userId = (req as any).user.id;
+      const userId = (req as any).user?.userId;
       const { plan, autoRenew } = req.body;
 
       const subscription = await subscriptionService.createSubscription({
@@ -144,7 +144,7 @@ router.put(
         throw new ValidationError('参数验证失败');
       }
 
-      const userId = (req as any).user.id;
+      const userId = (req as any).user?.userId;
       const { plan } = req.body;
 
       const subscription = await subscriptionService.upgradeSubscription(userId, plan);
@@ -171,7 +171,7 @@ router.put(
  */
 router.post('/cancel', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.userId;
 
     await subscriptionService.cancelSubscription(userId);
 
@@ -193,7 +193,7 @@ router.post('/cancel', authMiddleware, async (req: Request, res: Response) => {
  */
 router.post('/renew', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.userId;
 
     const subscription = await subscriptionService.renewSubscription(userId);
 
@@ -215,7 +215,7 @@ router.post('/renew', authMiddleware, async (req: Request, res: Response) => {
  */
 router.get('/active', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).user?.userId;
 
     const isActive = await subscriptionService.isSubscriptionActive(userId);
 

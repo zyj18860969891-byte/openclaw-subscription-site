@@ -31,7 +31,7 @@ router.post(
       }
 
       const { subscriptionId, planId, method, amount, tradeType, openId } = req.body;
-      const userId = (req as any).user.id;
+      const userId = (req as any).user?.userId;
 
       // 创建支付订单
       const result = await paymentGateway.createPayment({

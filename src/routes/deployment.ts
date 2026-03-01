@@ -27,7 +27,7 @@ router.get('/status/:subscriptionId', authMiddleware, async (req, res, next) => 
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.id !== userId) {
+    if (subscription.user.userId !== userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -65,7 +65,7 @@ router.post('/trigger', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.id !== (req as any).user?.id) {
+    if (subscription.user.userId !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -109,7 +109,7 @@ router.post('/retry', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.id !== (req as any).user?.id) {
+    if (subscription.user.userId !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -147,7 +147,7 @@ router.delete('/cancel', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.id !== (req as any).user?.id) {
+    if (subscription.user.userId !== (req as any).user?.userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 
@@ -170,7 +170,7 @@ router.delete('/cancel', authMiddleware, async (req, res, next) => {
 router.get('/logs/:subscriptionId', authMiddleware, async (req, res, next) => {
   try {
     const { subscriptionId } = req.params;
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
 
     // 验证用户权限
     const subscription = await prisma.subscription.findUnique({
@@ -182,7 +182,7 @@ router.get('/logs/:subscriptionId', authMiddleware, async (req, res, next) => {
       throw new AppError('Subscription not found', 404);
     }
 
-    if (subscription.user.id !== userId) {
+    if (subscription.user.userId !== userId) {
       throw new AppError('Unauthorized to access this subscription', 403);
     }
 

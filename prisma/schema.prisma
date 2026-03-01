@@ -179,6 +179,8 @@ model RailwayInstance {
   @@index([userId])
   @@index([status])
   @@index([deploymentStatus])
+  @@index([userId, status]) // 复合索引：按用户和状态查询
+  @@index([userId, createdAt]) // 复合索引：按用户和时间排序查询
   @@unique([projectId])
 }
 

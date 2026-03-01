@@ -115,7 +115,8 @@ router.post(
 router.get('/instances', authMiddleware, async (req: Request, res: Response) => {
   try {
     console.log('🔍 [Railway] 开始获取实例列表');
-    const userId = (req as any).user?.id;
+    // 从JWT token payload中获取userId（注意：payload中字段名为userId，不是id）
+    const userId = (req as any).user?.userId;
     console.log('🔍 [Railway] 用户ID:', userId);
     
     if (!userId) {
@@ -127,22 +128,10 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       return;
     }
 
-    console.log('🔍 [Railway] 开始数据库连接检查');
-    try {
-      await prisma.$connect();
-      console.log('✅ [Railway] 数据库连接正常');
-    } catch (dbError) {
-      console.error('❌ [Railway] 数据库连接失败:', dbError);
-      res.status(500).json({
-        success: false,
-        message: 'Database connection failed',
-      });
-      return;
-    }
-
     console.log('🔍 [Railway] 开始数据库查询');
     const startTime = Date.now();
     
+    // 优化查询：限制返回数量，避免大数据集
     const instances = await prisma.railwayInstance.findMany({
       where: {
         userId,
@@ -162,6 +151,7 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       orderBy: {
         createdAt: 'desc',
       },
+      take: 50, // 限制返回数量
     });
 
     const queryTime = Date.now() - startTime;
