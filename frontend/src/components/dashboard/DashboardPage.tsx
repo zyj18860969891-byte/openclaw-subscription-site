@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { subscriptionService } from '../../services/subscriptionService';
 import { railwayService } from '../../services/railwayService';
@@ -11,7 +11,14 @@ export function DashboardPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usingCache, setUsingCache] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  
+  // 使用useRef存储轮询定时器，避免重复创建
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // 首次加载数据
   useEffect(() => {
     // 延迟加载数据，避免阻塞页面渲染
     const timer = setTimeout(() => {
@@ -21,10 +28,58 @@ export function DashboardPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // 设置轮询：每30秒刷新一次数据
+  useEffect(() => {
+    // 清理之前的轮询
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+
+    // 设置新的轮询（仅在数据加载完成后）
+    if (!loading && subscription) {
+      pollIntervalRef.current = setInterval(() => {
+        console.log('🔄 [Dashboard] 自动刷新数据（轮询）');
+        refreshData();
+      }, 30000); // 30秒轮询间隔
+    }
+
+    // 清理函数
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [loading, subscription]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
+      setUsingCache(false);
+      
+      // 尝试从localStorage加载缓存数据
+      const cachedData = localStorage.getItem('dashboard_cache');
+      if (cachedData) {
+        const { subscription: cachedSub, instances: cachedInst, timestamp } = JSON.parse(cachedData);
+        const cacheAge = Date.now() - timestamp;
+        
+        // 如果缓存小于5分钟，使用缓存数据
+        if (cacheAge < 5 * 60 * 1000) {
+          console.log('✅ [Dashboard] 使用缓存数据，缓存年龄:', Math.round(cacheAge / 1000), '秒');
+          setSubscription(cachedSub);
+          setInstances(cachedInst);
+          setUsingCache(true);
+          setLastRefresh(new Date(timestamp));
+          setLoading(false);
+          
+          // 后台刷新数据
+          refreshTimeoutRef.current = setTimeout(() => refreshData(), 1000);
+          return;
+        }
+      }
       
       // 并行请求两个API，增加超时时间到30秒
       const timeoutPromise = new Promise((_, reject) => {
@@ -39,8 +94,33 @@ export function DashboardPage() {
       
       setSubscription(sub);
       setInstances(inst);
+      setLastRefresh(new Date());
+      
+      // 保存到localStorage缓存
+      localStorage.setItem('dashboard_cache', JSON.stringify({
+        subscription: sub,
+        instances: inst,
+        timestamp: Date.now(),
+      }));
+      
     } catch (err: any) {
       console.error('Dashboard fetch error:', err);
+      
+      // 尝试从localStorage加载缓存数据作为降级
+      const cachedData = localStorage.getItem('dashboard_cache');
+      if (cachedData) {
+        const { subscription: cachedSub, instances: cachedInst, timestamp } = JSON.parse(cachedData);
+        const cacheAge = Date.now() - timestamp;
+        
+        console.warn('⚠️ [Dashboard] API失败，使用缓存数据，缓存年龄:', Math.round(cacheAge / 1000), '秒');
+        setSubscription(cachedSub);
+        setInstances(cachedInst);
+        setUsingCache(true);
+        setLastRefresh(new Date(timestamp));
+        setLoading(false);
+        setError('Using cached data. Some information may be slightly outdated.');
+        return;
+      }
       
       // 根据错误类型设置不同的错误消息
       if (err.message === 'Request timeout') {
@@ -53,6 +133,36 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshData = async () => {
+    try {
+      const [sub, inst] = await Promise.all([
+        subscriptionService.getCurrentSubscription(),
+        railwayService.getInstances(),
+      ]);
+      
+      setSubscription(sub);
+      setInstances(inst);
+      setUsingCache(false);
+      setLastRefresh(new Date());
+      
+      // 更新缓存
+      localStorage.setItem('dashboard_cache', JSON.stringify({
+        subscription: sub,
+        instances: inst,
+        timestamp: Date.now(),
+      }));
+      
+      console.log('✅ [Dashboard] 数据已刷新');
+    } catch (err) {
+      console.warn('⚠️ [Dashboard] 刷新数据失败，继续使用缓存');
+    }
+  };
+
+  const handleManualRefresh = () => {
+    console.log('🔄 [Dashboard] 手动刷新数据');
+    refreshData();
   };
 
   const handleCreateInstance = async () => {
@@ -113,6 +223,7 @@ export function DashboardPage() {
     return (
       <div className="dashboard-page" style={{ padding: '40px', textAlign: 'center' }}>
         <div>Loading dashboard...</div>
+        {usingCache && <div style={{ color: 'orange', marginTop: '10px' }}>Using cached data</div>}
       </div>
     );
   }
@@ -121,6 +232,7 @@ export function DashboardPage() {
     return (
       <div className="dashboard-page" style={{ padding: '40px', textAlign: 'center' }}>
         <div style={{ color: 'red' }}>{error}</div>
+        {usingCache && <div style={{ color: 'orange', marginTop: '10px' }}>⚠️ Using cached data (may be outdated)</div>}
         <button onClick={fetchData} style={{ marginTop: '16px' }}>
           Retry
         </button>
@@ -131,10 +243,39 @@ export function DashboardPage() {
   return (
     <div className="dashboard-page">
       <header className="dashboard-header" style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 700 }}>Dashboard</h1>
-        <p style={{ color: '#666', marginTop: '8px' }}>
-          Manage your subscription and instances
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: '32px', fontWeight: 700 }}>Dashboard</h1>
+            <p style={{ color: '#666', marginTop: '8px' }}>
+              Manage your subscription and instances
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {usingCache && (
+              <span style={{ color: 'orange', fontSize: '14px' }}>
+                ⚠️ Using cached data
+              </span>
+            )}
+            {lastRefresh && (
+              <span style={{ color: '#666', fontSize: '14px' }}>
+                Last updated: {lastRefresh.toLocaleTimeString()}
+              </span>
+            )}
+            <button 
+              onClick={handleManualRefresh}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#1976d2',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* Tab Navigation */}
