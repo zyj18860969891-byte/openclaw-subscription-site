@@ -11,6 +11,10 @@ import { authMiddleware } from '../middleware/auth';
 const router = Router();
 const prisma = new PrismaClient();
 
+// 简单的内存缓存（生产环境建议使用Redis）
+const instanceCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 缓存30秒
+
 /**
  * POST /api/railway/instances
  * 创建新的Railway实例
@@ -25,7 +29,7 @@ router.post(
   ],
   async (req: Request, res: Response) => {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.userId;
       if (!userId) {
         res.status(401).json({
           success: false,
@@ -131,9 +135,23 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
     console.log('🔍 [Railway] 开始数据库查询');
     const startTime = Date.now();
     
-    // 优化查询：限制返回数量，避免大数据集
-    // 使用索引提示（如果PostgreSQL支持）
-    const instances = await prisma.railwayInstance.findMany({
+    // 检查缓存
+    const cacheKey = `railway_instances:${userId}`;
+    const cached = instanceCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log('✅ [Railway] 使用缓存数据，耗时: 0ms');
+      return res.json({
+        success: true,
+        data: cached.data,
+        count: cached.data.length,
+        cached: true,
+      });
+    }
+
+    console.log('🔍 [Railway] 缓存未命中，开始数据库查询');
+    
+    // 设置查询超时（15秒）
+    const queryPromise = prisma.railwayInstance.findMany({
       where: {
         userId,
       },
@@ -155,8 +173,20 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       take: 50, // 限制返回数量
     });
 
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timeout')), 15000);
+    });
+
+    const instances = await Promise.race([queryPromise, timeoutPromise]) as any;
+
     const queryTime = Date.now() - startTime;
     console.log(`✅ [Railway] 数据库查询完成，耗时: ${queryTime}ms，找到 ${instances.length} 个实例`);
+
+    // 更新缓存
+    instanceCache.set(cacheKey, {
+      data: instances,
+      timestamp: Date.now(),
+    });
 
     // 如果查询太慢，记录警告
     if (queryTime > 1000) {
@@ -167,9 +197,27 @@ router.get('/instances', authMiddleware, async (req: Request, res: Response) => 
       success: true,
       data: instances,
       count: instances.length,
+      cached: false,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching instances:', error);
+    
+    // 如果是超时错误，尝试返回缓存（即使过期）
+    if (error.message === 'Database query timeout') {
+      const cacheKey = `railway_instances:${userId}`;
+      const cached = instanceCache.get(cacheKey);
+      if (cached) {
+        console.warn('⚠️ [Railway] 查询超时，返回过期缓存数据');
+        return res.json({
+          success: true,
+          data: cached.data,
+          count: cached.data.length,
+          cached: true,
+          warning: 'Data may be slightly outdated due to slow database',
+        });
+      }
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to fetch instances',
