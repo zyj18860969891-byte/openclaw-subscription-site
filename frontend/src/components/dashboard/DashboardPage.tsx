@@ -26,17 +26,16 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       
-      // 分别调用 API，避免一个失败影响另一个
-      const subPromise = subscriptionService.getCurrentSubscription();
-      const instPromise = railwayService.getInstances();
-      
-      // 设置超时
+      // 并行请求两个API，增加超时时间到30秒
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 10000);
+        setTimeout(() => reject(new Error('Request timeout')), 30000);
       });
       
-      const sub = await Promise.race([subPromise, timeoutPromise]);
-      const inst = await Promise.race([instPromise, timeoutPromise]);
+      // 使用Promise.all并行执行，并设置超时
+      const [sub, inst] = await Promise.all([
+        Promise.race([subscriptionService.getCurrentSubscription(), timeoutPromise]),
+        Promise.race([railwayService.getInstances(), timeoutPromise]),
+      ]);
       
       setSubscription(sub);
       setInstances(inst);
@@ -45,7 +44,7 @@ export function DashboardPage() {
       
       // 根据错误类型设置不同的错误消息
       if (err.message === 'Request timeout') {
-        setError('Some data is loading slowly. Please try refreshing in a moment.');
+        setError('Data is loading slowly. Please wait a moment or refresh the page.');
       } else if (err.response?.status === 404) {
         setError('Some services are temporarily unavailable. Please try again later.');
       } else {

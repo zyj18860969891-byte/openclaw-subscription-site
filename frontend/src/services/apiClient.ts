@@ -11,7 +11,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 seconds
+  timeout: 30000, // 30 seconds - 增加超时时间以应对慢查询
 });
 
 // 请求拦截器 - 添加认证token（延迟获取，避免循环依赖）
